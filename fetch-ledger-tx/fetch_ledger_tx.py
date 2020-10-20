@@ -77,7 +77,10 @@ async def get_txn_range(pool: Pool, seq_nos):
     return [await get_txn(pool, seq_no) for seq_no in seq_nos]
 
 async def get_cred_by_Id(credId):
-    return build_get_cred_def_request(None, credId)
+    req = build_get_cred_def_request(
+        None, credId
+    )
+    return req.body
 
 async def fetch_status(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None):
     pool = await open_pool(transactions_path=genesis_path)
@@ -102,7 +105,7 @@ async def fetch_status(genesis_path: str, schemaid: str = None, pooltx: bool = F
 
     if credid:
         response = await get_cred_by_Id(credid)
-        print(response.body)
+        print(response)
 
     #TODO Implement revocation lookups
     # revoc_id = (
@@ -132,7 +135,6 @@ async def fetch_status(genesis_path: str, schemaid: str = None, pooltx: bool = F
 
 def get_script_dir():
     return os.path.dirname(os.path.realpath(__file__))
-
 
 def download_genesis_file(url: str, target_local_path: str):
     log("Fetching genesis file ...")
