@@ -2,11 +2,11 @@
 
 This folder contains a simple Python script that uses [indy-vdr](https://github.com/hyperledger/indy-vdr) to execute various calls to an Indy network to fetch ledger transactions. 
 
-The various transaction parameters returns a information such as schema_id lookups, cred_def_id lookups, pool ledger transaction or main ledger transactions about the accessed ledger. 
+The various transaction parameters returns information such as schema_id lookups, cred_def_id lookups, pool ledger transaction or main ledger transactions about the accessed ledger. 
 
-An example of the JSON data returned by the call for an individual node is provided [below](#example-ledger-info-for-a-specific-ledger-transaction).
+An example of the JSON data returned by the call for a specific ledger transaction is provided [below](#example-ledger-info-for-a-specific-ledger-transaction).
 
-No authourised DID is required and this tool can always be run with the -a parameter so that it run in anonymous mode.
+*No authourised DID is required and this tool can always be run with the -a parameter so that it run in anonymous mode.*
 
 The easiest way to use this now is to use the `./run` script and the Docker build process provide in this folder. Work is in progress to add a CI/CD capability to `indy-vdr` so that the artifacts are published to PyPi and native Python apps can be used. In the meantime, we recommend either making changes to the included Python script, or better, just adding programs that read from standard input and process the output of the `./run` script.
 
@@ -75,22 +75,7 @@ To get the details for the known networks available for use with the `--net` opt
 
 To run the ledger info script, run the following command in your bash terminal from the `fetch-ledger-tx` folder in the `indy-ledger-monitor` clone:
 
-``` bash
-./run.sh -a --net=<netId> --seed=<SEED>
-```
-or
-``` bash
-./run.sh -a --genesis-url=<URL> --seed=<SEED>
-```
-
-This repo don't require any privileged DID and the `-a` parameter can be used at all times.
-``` bash
-./run.sh --net=<netId> -a
-```
-or
-``` bash
-./run.sh --genesis-url=<URL> -a
-```
+*This repo don't require any privileged DID and the `-a` parameter can be used at all times.*
 
 To fetch pool transactions, run:
 ``` bash
@@ -108,7 +93,7 @@ To fetch a specific main ledger transaction use the `--maintx` argument and prov
 
 To fetch a range of main ledger transactions use the `--maintxr` argument and provide a transaction sequence number range;
 ``` bash
-./run.sh -a --net=<netId> --maintx 1-5
+./run.sh -a --net=<netId> --maintxr 1-5
 ```
 
 To fetch a schema id from the ledger use the `--schemaid` argument and provide a schema id;
@@ -116,7 +101,7 @@ To fetch a schema id from the ledger use the `--schemaid` argument and provide a
 ./run.sh -a --net=<netId> --schemaid QXdMLmAKZmQBhnvXHxKn78:2:SURFNetSchema:1.0
 ```
 
-To fetch a credential definition id of main ledger transactions use the `--credid` argument and provide a transaction credential definition id;
+To fetch a credential definition id from the ledger use the `--credid` argument and provide a transaction credential definition id;
 ``` bash
 ./run.sh -a --net=<netId> --credid A9Rsuu7FNquw8Ne2Smu5Nr:3:CL:15:tag
 ```
@@ -129,20 +114,20 @@ For the first test run using von-network:
 If you are running locally, the full command is:
 
 ``` bash
-./run.sh --net=vn --seed=000000000000000000000000Trustee1 --pooltx True
+./run.sh --net=vn -a --pooltx True
 ```
 or
 ``` bash
-./run.sh --genesis-url=http://localhost:9000/genesis --seed=000000000000000000000000Trustee1 --pooltx True
+./run.sh --genesis-url=http://localhost:9000/genesis -a --pooltx True
 ```
 
 If running in the browser, you will have to get the URL for the Genesis file (as described above) and replace the `localhost` URL above.
 
-You should see a very long JSON structure printed to the terminal. You can redirect the output to a file by adding something like `> pool_transactions.json` at the end of the command.
+You should see a long JSON structure printed to the terminal. You can redirect the output to a file by adding something like `> pool_transactions.json` at the end of the command.
 
 ### Running against other Indy Networks
 
-To see the ledger info script against any other Indy network, you need a URL for the Genesis file for the network, and the seed for a suitably authorized DID. The pool Genesis file URLs are easy, since that is published data needed by agents connecting to Indy networks. Sovrin genesis URLs can be found [here](https://github.com/sovrin-foundation/sovrin/tree/master/sovrin). You need the URL for the raw version of the pool transaction files. For example, the URL you need for the Sovrin MainNet is:
+To see the ledger info script against any other Indy network, you need a URL for the Genesis file for the network. The pool Genesis file URLs are easy, since that is published data needed by agents connecting to Indy networks. Sovrin genesis URLs can be found [here](https://github.com/sovrin-foundation/sovrin/tree/master/sovrin). You need the URL for the raw version of the pool transaction files. For example, the URL you need for the Sovrin MainNet is:
 
 - [`https://raw.githubusercontent.com/sovrin-foundation/sovrin/master/sovrin/pool_transactions_live_genesis`](`https://raw.githubusercontent.com/sovrin-foundation/sovrin/master/sovrin/pool_transactions_live_genesis`)
 
