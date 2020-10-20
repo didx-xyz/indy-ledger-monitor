@@ -172,9 +172,6 @@ if __name__ == "__main__":
     parser.add_argument("-maintxr", "--maintxrange", type=parseNumList, help="Get a range of transactions from main ledger.")
     parser.add_argument("-credid", "--credid", help="Get a specific schema from ledger.")
     parser.add_argument("-a", "--anonymous", action="store_true", help="Perform requests anonymously, without requiring privileged DID seed.")
-    # parser.add_argument("--status", action="store_true", help="Get status only.  Suppresses detailed results.")
-    # parser.add_argument("--alerts", action="store_true", help="Filter results based on alerts.  Only return data for nodes containing detected 'info', 'warnings', or 'errors'.")
-    # parser.add_argument("--nodes", help="The comma delimited list of the nodes from which to collect the status.  The default is all of the nodes in the pool.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
     args = parser.parse_args()
 
