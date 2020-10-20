@@ -11,15 +11,25 @@ import re
 from typing import Tuple
 
 import nacl.signing
-
+from indy_vdr.bindings import version
 import indy_vdr
 from indy_vdr.ledger import (
-    build_get_validator_info_request,
+    build_custom_request,
     build_get_txn_request,
-    Request,
-    LedgerType,
+    build_get_acceptance_mechanisms_request,
+    build_get_txn_author_agreement_request,
+    build_get_validator_info_request,
+    build_get_cred_def_request,
+    build_get_revoc_reg_def_request,
+    build_get_revoc_reg_request,
+    build_get_revoc_reg_delta_request,
     build_get_schema_request,
+    # build_rich_schema_request,
     # build_get_schema_object_by_id_request,
+    # build_get_schema_object_by_metadata_request,
+    prepare_txn_author_agreement_acceptance,
+    LedgerType,
+    Request,
 )
 from indy_vdr.pool import Pool, open_pool
 
@@ -66,7 +76,10 @@ async def get_txn(pool: Pool, seq_no: int):
 async def get_txn_range(pool: Pool, seq_nos):
     return [await get_txn(pool, seq_no) for seq_no in seq_nos]
 
-async def fetch_status(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None):
+async def get_cred_by_Id(credId):
+    return build_get_cred_def_request(None, credId)
+
+async def fetch_status(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None):
     pool = await open_pool(transactions_path=genesis_path)
     result = []
 
@@ -86,6 +99,10 @@ async def fetch_status(genesis_path: str, schemaid: str = None, pooltx: bool = F
     if maintxr:
         maintxr_response = await get_txn_range(pool, list(maintxr))
         print(json.dumps(maintxr_response, indent=2))
+
+    if credid:
+        response = await get_cred_by_Id(credid)
+        print(response.body)
 
 def get_script_dir():
     return os.path.dirname(os.path.realpath(__file__))
@@ -125,6 +142,7 @@ if __name__ == "__main__":
     parser.add_argument("-schemaid", "--schemaid", help="Get a specific schema from ledger.")
     parser.add_argument("-maintx", "--maintx", help="Get a specific transaction number from main ledger.")
     parser.add_argument("-maintxr", "--maintxrange", type=parseNumList, help="Get a range of transactions from main ledger.")
+    parser.add_argument("-credid", "--credid", help="Get a specific schema from ledger.")
     parser.add_argument("-a", "--anonymous", action="store_true", help="Perform requests anonymously, without requiring privileged DID seed.")
     # parser.add_argument("--status", action="store_true", help="Get status only.  Suppresses detailed results.")
     # parser.add_argument("--alerts", action="store_true", help="Filter results based on alerts.  Only return data for nodes containing detected 'info', 'warnings', or 'errors'.")
@@ -166,4 +184,4 @@ if __name__ == "__main__":
         ident = None
 
     # asyncio.get_event_loop().run_until_complete(fetch_status(args.genesis_path, args.nodes, ident, args.status, args.alerts))
-    asyncio.get_event_loop().run_until_complete(fetch_status(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx))
+    asyncio.get_event_loop().run_until_complete(fetch_status(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid))
