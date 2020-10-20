@@ -7,6 +7,7 @@ Indy Ledger Monitor is a set of tools for fetching transactions from an Indy Led
 * fetch schema id details
 * fetch credential definition details
 * fetch revocation details
+* fetch NYM details
 
 The repo has basic tools to collect and format data and tools for using that data in different ways.
 
