@@ -4,7 +4,7 @@ This folder contains a simple Python script that uses [indy-vdr](https://github.
 
 The various transaction parameters returns a information such as schema_id lookups, cred_def_id lookups, pool ledger transaction or main ledger transactions about the accessed ledger. 
 
-An example of the JSON data returned by the call for an individual node is provided [below](#example-validator-info).
+An example of the JSON data returned by the call for an individual node is provided [below](#Example ledger info for a specific ledger transaction).
 
 No authourised DID is required and this tool can always be run with the -a parameter so that it run in anonymous mode.
 
