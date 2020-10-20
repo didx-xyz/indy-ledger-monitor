@@ -17,9 +17,9 @@ else
   export DOCKER_INTERACTIVE="-it"
 fi
 
-docker build -t fetch_status . > /dev/null 2>&1
+docker build -t fetch_ledger_tx . > /dev/null 2>&1
 ${terminalEmu} docker run --rm ${DOCKER_INTERACTIVE} \
     -e "GENESIS_PATH=${GENESIS_PATH}" \
     -e "GENESIS_URL=${GENESIS_URL}" \
     -e "SEED=${SEED}" \
-    fetch_status "$@"
+    fetch_ledger_tx "$@"
