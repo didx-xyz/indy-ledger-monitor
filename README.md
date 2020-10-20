@@ -1,22 +1,20 @@
-# Indy Node Monitor
+# Indy Ledger Monitor
 
-Indy Node Monitor is a set of tools for monitoring the status of an Indy Ledger by querying the validator information of the nodes of the ledger. Based on that, data can be generated data suitable for:
+Indy Ledger Monitor is a set of tools for fetching transactions from an Indy Ledger by querying the validators of the ledger. Based on that, requests can be made for ledger transactions such as:
 
-* visualization on a dashboard
-* tracking trends about the status of nodes and the overall ledger
-* tracking read and write uptimes
-* tracking ledger usage such as number of transactions on the ledger
-* driving notifications of node outages
+* fetch pool ledger transactions
+* fetch main ledger transaction(s)
+* fetch schema id details
+* fetch credential definition details
+* fetch revocation details
 
 The repo has basic tools to collect and format data and tools for using that data in different ways.
 
-Contributions are welcome of tools that consume the collected data to enable easy ways to monitor an Indy network, such as configurations of visualization dashboards that can be deployed by many users. For example, an ELK stack or Splunk configuration that receives validator info and presents it in a ledger dashboard. Or an interface to [Pager Duty](https://www.pagerduty.com/) to enable node outage notifications.
+## Fetch Ledger Information
 
-## Fetch Validator Status
+This is a simple tool that can be used to retrieve ledger transactions from an Indy network. The results are returned as a JSON.
 
-This is a simple tool that can be used to retrieve "validator-info"&mdash;detailed status data about an Indy node (aka "validator)&mdash;from all the nodes in a network. The results are returned as a JSON array with a record per validator.
-
-For more details see the Fetch Validator Status [readme](fetch-validator-status/README.md)
+For more details see the Fetch Ledger Information [readme](fetch-ledger-tx/README.md)
 
 ## Contributions
 
