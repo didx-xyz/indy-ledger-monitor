@@ -104,6 +104,32 @@ async def fetch_status(genesis_path: str, schemaid: str = None, pooltx: bool = F
         response = await get_cred_by_Id(credid)
         print(response.body)
 
+    #TODO Implement revocation lookups
+    # revoc_id = (
+    #     "L5wx9FUxCDpFJEdFc23jcn:4:L5wx9FUxCDpFJEdFc23jcn:3:CL:1954:"
+    #     "default:CL_ACCUM:c024e30d-f3eb-42c5-908a-ff885667588d"
+    # )
+    #
+    # req = build_get_revoc_reg_def_request(None, revoc_id)
+    # print("Get revoc reg def request:", req.body)
+    #
+    # req = build_get_revoc_reg_request(None, revoc_id, timestamp=1)
+    # print("Get revoc reg request:", req.body)
+    #
+    # req = build_get_revoc_reg_delta_request(None, revoc_id, from_ts=None, to_ts=1)
+    # print("Get revoc reg delta request:", req.body)
+
+    # req = build_rich_schema_request(
+    #     None, "did:sov:some_hash", '{"some": 1}', "test", "version", "sch", "1.0.0"
+    # )
+    # log("Get rich schema request:", req.body)
+
+    # req = build_get_schema_object_by_id_request(None, "did:sov:some_hash")
+    # log("Get rich schema GET request by ID:", req.body)
+    #
+    # req = build_get_schema_object_by_metadata_request(None, "sch", "test", "1.0.0")
+    # log("Get rich schema GET request by Metadata:", req.body)
+
 def get_script_dir():
     return os.path.dirname(os.path.realpath(__file__))
 
