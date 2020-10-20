@@ -28,6 +28,7 @@ from indy_vdr.ledger import (
     # build_get_schema_object_by_id_request,
     # build_get_schema_object_by_metadata_request,
     prepare_txn_author_agreement_acceptance,
+    build_get_nym_request,
     LedgerType,
     Request,
 )
@@ -106,6 +107,10 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
     if credid:
         response = await get_cred_by_Id(credid)
         print(response)
+
+    #TODO Implement get nym request lookup
+    # req = build_get_nym_request(None, NYM)
+    # print("Get revoc reg def request:", req.body)
 
     #TODO Implement revocation lookups
     # revoc_id = (
