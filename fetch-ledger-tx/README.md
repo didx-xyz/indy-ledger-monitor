@@ -94,11 +94,11 @@ or
 
 To fetch pool transactions, run:
 ``` bash
-./run.sh -a --net=<netId> --pooltx
+./run.sh -a --net=<netId> --pooltx True
 ```
 or
 ``` bash
-./run.sh -a --genesis-url=<URL> --pooltx
+./run.sh -a --genesis-url=<URL> --pooltx True
 ```
 
 To fetch a specific main ledger transaction use the `--maintx` argument and provide a transaction sequence number;
@@ -129,11 +129,11 @@ For the first test run using von-network:
 If you are running locally, the full command is:
 
 ``` bash
-./run.sh --net=vn --seed=000000000000000000000000Trustee1 --pooltx
+./run.sh --net=vn --seed=000000000000000000000000Trustee1 --pooltx True
 ```
 or
 ``` bash
-./run.sh --genesis-url=http://localhost:9000/genesis --seed=000000000000000000000000Trustee1 --pooltx
+./run.sh --genesis-url=http://localhost:9000/genesis --seed=000000000000000000000000Trustee1 --pooltx True
 ```
 
 If running in the browser, you will have to get the URL for the Genesis file (as described above) and replace the `localhost` URL above.
