@@ -82,7 +82,7 @@ async def get_cred_by_Id(credId):
     )
     return req.body
 
-async def fetch_status(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None):
+async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None):
     pool = await open_pool(transactions_path=genesis_path)
     result = []
 
@@ -209,4 +209,4 @@ if __name__ == "__main__":
         ident = None
 
     # asyncio.get_event_loop().run_until_complete(fetch_status(args.genesis_path, args.nodes, ident, args.status, args.alerts))
-    asyncio.get_event_loop().run_until_complete(fetch_status(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid))
+    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid))
