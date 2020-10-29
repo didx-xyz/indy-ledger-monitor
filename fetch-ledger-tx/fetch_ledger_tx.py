@@ -60,15 +60,15 @@ def seed_as_bytes(seed):
         return base64.b64decode(seed)
     return seed.encode("ascii")
 
-async def get_schema_by_Id(schemaId):
+async def get_schema_by_Id(pool: Pool, schemaId):
     req = build_get_schema_request(
         None, schemaId
     )
-    return req.body
-    # log("Get schema request:", req.body)
+    return await pool.submit_request(req)
 
 async def get_pool_txns(pool: Pool):
-    return await pool.get_transactions()
+    pool_txns = await pool.get_transactions()
+    return pool_txns
 
 async def get_txn(pool: Pool, seq_no: int):
     req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
@@ -77,11 +77,11 @@ async def get_txn(pool: Pool, seq_no: int):
 async def get_txn_range(pool: Pool, seq_nos):
     return [await get_txn(pool, seq_no) for seq_no in seq_nos]
 
-async def get_cred_by_Id(credId):
+async def get_cred_by_Id(pool: Pool, credId):
     req = build_get_cred_def_request(
         None, credId
     )
-    return req.body
+    return await pool.submit_request(req)
 
 async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None):
     pool = await open_pool(transactions_path=genesis_path)
@@ -89,8 +89,8 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
 
     if schemaid:
         # "QXdMLmAKZmQBhnvXHxKn78:2:SURFNetSchema:1.0"
-        response = await get_schema_by_Id(schemaid)
-        print(response)
+        response = await get_schema_by_Id(pool, schemaid)
+        print(json.dumps(response, indent=2))
 
     if pooltx:
         pooltx_response = await get_pool_txns(pool)
@@ -105,8 +105,8 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
         print(json.dumps(maintxr_response, indent=2))
 
     if credid:
-        response = await get_cred_by_Id(credid)
-        print(response)
+        response = await get_cred_by_Id(pool, credid)
+        print(json.dumps(response, indent=2))
 
     #TODO Implement get nym request lookup
     # req = build_get_nym_request(None, NYM)
