@@ -33,6 +33,7 @@ from indy_vdr.ledger import (
     Request,
 )
 from indy_vdr.pool import Pool, open_pool
+from sovrin_network_metrics import metrics
 
 verbose = False
 
@@ -83,7 +84,7 @@ async def get_cred_by_Id(pool: Pool, credId):
     )
     return await pool.submit_request(req)
 
-async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None):
+async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, network_name: str = None, metrics_log_only: bool = False, metrics_log_info: list = []):
     pool = await open_pool(transactions_path=genesis_path)
     result = []
 
@@ -102,7 +103,11 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
 
     if maintxr:
         maintxr_response = await get_txn_range(pool, list(maintxr))
-        print(json.dumps(maintxr_response, indent=2))
+        if metrics_log_only:
+            metrics(maintxr_response, network_name, metrics_log_info)
+            # print(json.dumps(maintxr_response, indent=2))
+        else:
+            print(json.dumps(maintxr_response, indent=2))
 
     if credid:
         response = await get_cred_by_Id(pool, credid)
@@ -175,6 +180,12 @@ if __name__ == "__main__":
     parser.add_argument("-schemaid", "--schemaid", help="Get a specific schema from ledger.")
     parser.add_argument("-maintx", "--maintx", help="Get a specific transaction number from main ledger.")
     parser.add_argument("-maintxr", "--maintxrange", type=parseNumList, help="Get a range of transactions from main ledger.")
+
+    parser.add_argument("--mlog", action="store_true", help="Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name. ex: --mlog --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]")
+    parser.add_argument("--json", default=os.environ.get('JSON') , help="Google API Credentials json file name (file must be in root folder). Can be specified using the 'JSON' environment variable.")
+    parser.add_argument("--file", default=os.environ.get('FILE') , help="Specify which google sheets file you want to log too. Can be specified using the 'FILE' environment variable.")
+    parser.add_argument("--worksheet", default=os.environ.get('WORKSHEET') , help="Specify which worksheet you want to log too. Can be specified using the 'WORKSHEET' environment variable.")
+
     parser.add_argument("-credid", "--credid", help="Get a specific schema from ledger.")
     parser.add_argument("-a", "--anonymous", action="store_true", help="Perform requests anonymously, without requiring privileged DID seed.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
@@ -192,6 +203,7 @@ if __name__ == "__main__":
         if args.net in networks:
             log("Connecting to '{0}' ...".format(networks[args.net]["name"]))
             args.genesis_url = networks[args.net]["genesisUrl"]
+            network_name = networks[args.net]["name"]
 
     if args.genesis_url:
         download_genesis_file(args.genesis_url, args.genesis_path)
@@ -213,5 +225,14 @@ if __name__ == "__main__":
     else:
         ident = None
 
+    metrics_log_info = []
+    if args.mlog:
+        if args.json and args.file and args.worksheet:
+            metrics_log_info = [args.json, args.file, args.worksheet]
+        else:
+            print('Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name.')
+            print('ex: --mlog --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]')
+            exit()
+
     # asyncio.get_event_loop().run_until_complete(fetch_status(args.genesis_path, args.nodes, ident, args.status, args.alerts))
-    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid))
+    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid, network_name, args.mlog, metrics_log_info))
