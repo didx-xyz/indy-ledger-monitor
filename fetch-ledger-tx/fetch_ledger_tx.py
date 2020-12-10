@@ -33,7 +33,7 @@ from indy_vdr.ledger import (
     Request,
 )
 from indy_vdr.pool import Pool, open_pool
-from sovrin_network_metrics import metrics
+from sovrin_network_metrics import metrics, find_last
 
 verbose = False
 
@@ -101,13 +101,34 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
         maintx_response = await get_txn(pool, int(maintx))
         print(json.dumps(maintx_response, indent=2))
 
+    if metrics_log_only:
+        txn_range = [None] * 2
+        logging_range = [None] * 2
+
+        last_logged_txn = [find_last(metrics_log_info)]                     # Get last txn that was logged
+        txn_range[0] = last_logged_txn[0] + 1                               # get the next txn: txn_range[next_txn, ledger_size]
+        maintxr_response = await get_txn_range(pool, list(last_logged_txn)) # run the last logged txn to get ledger size
+        
+        for txn in maintxr_response:
+            txn_range[1] = txn["data"]["ledgerSize"]                        # get ledger size: txn_range[next_txn, ledger_size]
+        
+        num_of_new_txn = txn_range[1] - txn_range[0]                        # Find how many new txn there are.
+        print("Last transaction logged: " + str(last_logged_txn[0]) + " Adding transactions: " + str(txn_range[0]) + "-" + str(txn_range[1]))
+        print("Logging " + str(num_of_new_txn) + " new transactions")
+        
+        if num_of_new_txn > 3:                                              # Change Range if the number of new txn are too high
+            logging_range[0] = txn_range[0]
+            logging_range[1] = txn_range[0] + 3
+            print("Logging range too large! Logging range " + str(logging_range[0]) + "-" + str(logging_range[1]))
+            maintxr_response = await get_txn_range(pool, list(logging_range))
+        else:
+            maintxr_response = await get_txn_range(pool, list(txn_range))
+        
+        metrics(maintxr_response, network_name, metrics_log_info)
+    
     if maintxr:
         maintxr_response = await get_txn_range(pool, list(maintxr))
-        if metrics_log_only:
-            metrics(maintxr_response, network_name, metrics_log_info)
-            # print(json.dumps(maintxr_response, indent=2))
-        else:
-            print(json.dumps(maintxr_response, indent=2))
+        print(json.dumps(maintxr_response, indent=2))
 
     if credid:
         response = await get_cred_by_Id(pool, credid)
