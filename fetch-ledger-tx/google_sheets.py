@@ -24,21 +24,11 @@ def gspread_authZ(gauth_json):
     return(authD_client)
 
 # Insert data in sheet
-def gspread_append_sheet(authD_client, file_name, worksheet_name, row):
-    try:
-        sheet = authD_client.open(file_name).worksheet(worksheet_name) # Open sheet
-        sheet.append_row(row, value_input_option='USER_ENTERED') # Append sheet
-    except:
-        print("\033[1;31;40mUnable to upload data to sheet! Please check file and worksheet name and try again.")
-        print("File name entered: " + file_name + ". Worksheet name entered: " + worksheet_name + ".\033[m")
-        exit()
-
-# Insert data in sheet
-def gspread_insert_row(authD_client, file_name, worksheet_name, row):
-    try:
-        sheet = authD_client.open(file_name).worksheet(worksheet_name) # Open sheet
-        sheet.insert_row(row, 2,value_input_option='USER_ENTERED')
-    except:
-        print("\033[1;31;40mUnable to upload data to sheet! Please check file and worksheet name and try again.")
-        print("File name entered: " + file_name + ". Worksheet name entered: " + worksheet_name + ".\033[m")
-        exit()
+# def gspread_append_sheet(authD_client, file_name, worksheet_name, row):
+#     try:
+#         sheet = authD_client.open(file_name).worksheet(worksheet_name) # Open sheet
+#         sheet.append_row(row, value_input_option='USER_ENTERED') # Append sheet
+#     except:
+#         print("\033[1;31;40mUnable to upload data to sheet! Please check file and worksheet name and try again.")
+#         print("File name entered: " + file_name + ". Worksheet name entered: " + worksheet_name + ".\033[m")
+#         exit()

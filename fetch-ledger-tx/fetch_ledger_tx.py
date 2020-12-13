@@ -34,6 +34,7 @@ from indy_vdr.ledger import (
 )
 from indy_vdr.pool import Pool, open_pool
 from sovrin_network_metrics import metrics, find_last
+import time
 
 verbose = False
 
@@ -84,7 +85,7 @@ async def get_cred_by_Id(pool: Pool, credId):
     )
     return await pool.submit_request(req)
 
-async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, network_name: str = None, metrics_log_only: bool = False, metrics_log_info: list = []):
+async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, network_name: str = None, metrics_log_only: bool = False, USER_batchsize: int = 0, metrics_log_info: list = []):
     pool = await open_pool(transactions_path=genesis_path)
     result = []
 
@@ -103,28 +104,52 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
 
     if metrics_log_only:
         txn_range = [None] * 2
-        logging_range = [None] * 2
+        logging_range = [None] * 2 
+        int_USER_batchsize = int(USER_batchsize)
+        MAX_BATCH_SIZE = 100
+        batchsize = 10 # Default amount of txn to fetch from pool
 
         last_logged_txn = [find_last(metrics_log_info)]                     # Get last txn that was logged
-        txn_range[0] = last_logged_txn[0] + 1                               # get the next txn: txn_range[next_txn, ledger_size]
-        maintxr_response = await get_txn_range(pool, list(last_logged_txn)) # run the last logged txn to get ledger size
-        
+        txn_range[0] = last_logged_txn[0] + 1                               # Get the next txn: txn_range[next_txn, ledger_size]
+        maintxr_response = await get_txn_range(pool, list(last_logged_txn)) # Run the last logged txn to get ledger size
         for txn in maintxr_response:
-            txn_range[1] = txn["data"]["ledgerSize"]                        # get ledger size: txn_range[next_txn, ledger_size]
+            txn_range[1] = txn["data"]["ledgerSize"]                        # Get ledger size: txn_range[next_txn, ledger_size]
+        num_of_new_txn = txn_range[1] - txn_range[0] + 1                    # Find how many new txn there are.
         
-        num_of_new_txn = txn_range[1] - txn_range[0]                        # Find how many new txn there are.
-        print("Last transaction logged: " + str(last_logged_txn[0]) + " Adding transactions: " + str(txn_range[0]) + "-" + str(txn_range[1]))
-        print("Logging " + str(num_of_new_txn) + " new transactions")
+        if num_of_new_txn == 0:                                             # If no new txn exit()
+            print("No New Transactions. Exiting...")
+            exit()
         
-        if num_of_new_txn > 3:                                              # Change Range if the number of new txn are too high
-            logging_range[0] = txn_range[0]
-            logging_range[1] = txn_range[0] + 3
-            print("Logging range too large! Logging range " + str(logging_range[0]) + "-" + str(logging_range[1]))
-            maintxr_response = await get_txn_range(pool, list(logging_range))
+        if int_USER_batchsize == 0:
+            print("Number of stored logs not specifed. Storing " + str(batchsize) + " logs if avalible.")
+        elif int_USER_batchsize > MAX_BATCH_SIZE:
+            batchsize = MAX_BATCH_SIZE
+            print("The reqested batch size (" + str(int_USER_batchsize) + ") is to large. Setting to " + str(batchsize) + ".")
         else:
-            maintxr_response = await get_txn_range(pool, list(txn_range))
-        
-        metrics(maintxr_response, network_name, metrics_log_info)
+            batchsize = int_USER_batchsize
+            print("Storing "+ str(batchsize) + " logs if avalible.")
+
+        if num_of_new_txn < batchsize:                                     # Run to the end of the new txn if its less then the log interval
+            logging_range[0] = txn_range[0]
+            logging_range[1] = txn_range[1] + 1
+        else:                                                               # Set log interval to only grab a few tan at a time if there are more txn then batchsize
+            logging_range[0] = txn_range[0]
+            logging_range[1] = txn_range[0] + batchsize
+
+        #------------------- Below won't run unless there are new txns ----------------------------------
+
+        print(str(num_of_new_txn) + " new transactions. Last transaction logged: " + str(last_logged_txn[0]) + " Transaction Range: " + str(txn_range[0]) + "-" + str(txn_range[1]))
+
+        while True:
+            print("Logging transactions " + str(logging_range[0]) + "-" + str(logging_range[1]-1))
+            maintxr_response = await get_txn_range(pool, list(range(logging_range[0],logging_range[1])))
+            txn_seqNo = metrics(maintxr_response, network_name, metrics_log_info, txn_range)
+            if txn_seqNo == txn_range[1]:
+                break
+            logging_range[0] = txn_seqNo + 1
+            logging_range[1] = txn_seqNo + batchsize + 1 # put if here to have end of txxn if at end
+
+        print(str(txn_seqNo) + "/" + str(txn_range[1]) + " Transactions logged! " + str(num_of_new_txn) + " New Transactions. Done!")
     
     if maintxr:
         maintxr_response = await get_txn_range(pool, list(maintxr))
@@ -202,10 +227,11 @@ if __name__ == "__main__":
     parser.add_argument("-maintx", "--maintx", help="Get a specific transaction number from main ledger.")
     parser.add_argument("-maintxr", "--maintxrange", type=parseNumList, help="Get a range of transactions from main ledger.")
 
-    parser.add_argument("--mlog", action="store_true", help="Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name. ex: --mlog --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]")
-    parser.add_argument("--json", default=os.environ.get('JSON') , help="Google API Credentials json file name (file must be in root folder). Can be specified using the 'JSON' environment variable.")
-    parser.add_argument("--file", default=os.environ.get('FILE') , help="Specify which google sheets file you want to log too. Can be specified using the 'FILE' environment variable.")
-    parser.add_argument("--worksheet", default=os.environ.get('WORKSHEET') , help="Specify which worksheet you want to log too. Can be specified using the 'WORKSHEET' environment variable.")
+    parser.add_argument("--mlog", action="store_true", help="Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name. ex: --mlog --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]")
+    parser.add_argument("--json", default=os.environ.get('JSON') , help="Google API Credentials json file name (file must be in root folder). Can be specified using the 'JSON' environment variable.", nargs='*')
+    parser.add_argument("--file", default=os.environ.get('FILE') , help="Specify which google sheets file you want to log too. Can be specified using the 'FILE' environment variable.", nargs='*')
+    parser.add_argument("--worksheet", default=os.environ.get('WORKSHEET') , help="Specify which worksheet you want to log too. Can be specified using the 'WORKSHEET' environment variable.", nargs='*')
+    parser.add_argument("--batchsize", default=int(os.environ.get('BATCHSIZE') or '0') , help="Specify the read/write batch size. Not Required. Default is 10. Can be specified using the 'STORELOGS' environment variable.")
 
     parser.add_argument("-credid", "--credid", help="Get a specific schema from ledger.")
     parser.add_argument("-a", "--anonymous", action="store_true", help="Perform requests anonymously, without requiring privileged DID seed.")
@@ -213,6 +239,15 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     verbose = args.verbose
+
+    # Support names and paths containing spaces.
+    # Other workarounds including the standard of putting '"'s around values containing spaces does not always work.
+    if args.json:
+       args.json = ' '.join(args.json)
+    if args.file:
+       args.file = ' '.join(args.file)
+    if args.worksheet:
+       args.worksheet = ' '.join(args.worksheet)
 
     if args.list_nets:
         print(json.dumps(load_network_list(), indent=2))
@@ -252,8 +287,8 @@ if __name__ == "__main__":
             metrics_log_info = [args.json, args.file, args.worksheet]
         else:
             print('Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name.')
-            print('ex: --mlog --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]')
+            print('ex: --mlog  --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]')
             exit()
 
     # asyncio.get_event_loop().run_until_complete(fetch_status(args.genesis_path, args.nodes, ident, args.status, args.alerts))
-    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid, network_name, args.mlog, metrics_log_info))
+    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid, network_name, args.mlog, int(args.batchsize), metrics_log_info))
