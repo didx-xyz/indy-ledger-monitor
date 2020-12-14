@@ -26,7 +26,6 @@ def metrics(maintxr_response, network_name, metrics_log_info, txn_range):
     gauth_json = metrics_log_info[0]
     file_name = metrics_log_info[1]
     worksheet_name = metrics_log_info[2]
-    key = 'endorser'
 
     authD_client = gspread_authZ(gauth_json)
 
@@ -50,14 +49,23 @@ def metrics(maintxr_response, network_name, metrics_log_info, txn_range):
 
         txn_seqNo = txn["seqNo"]
         txn_type = txn["data"]["txn"]["type"]
-        txn_time_epoch = txn["data"]["txnMetadata"]["txnTime"]
-        txn_time = datetime.datetime.fromtimestamp(txn_time_epoch).strftime('%Y-%m-%d %H:%M:%S') # formated to 12-3-2020 21:27:49
-        txn_date = datetime.datetime.fromtimestamp(txn_time_epoch).strftime('%Y-%m-%d') # formated to 12-3-2020 21:27:49
-        if key in txn["data"]["txn"]["metadata"]:
+        
+        if 'txnTime' in txn["data"]["txnMetadata"]:
+            txn_time_epoch = txn["data"]["txnMetadata"]["txnTime"]
+            txn_time = datetime.datetime.fromtimestamp(txn_time_epoch).strftime('%Y-%m-%d %H:%M:%S') # formated to 12-3-2020 21:27:49
+            txn_date = datetime.datetime.fromtimestamp(txn_time_epoch).strftime('%Y-%m-%d') # formated to 12-3-2020 21:27:49
+        else:
+            txn_time, txn_date = "", ""
+        
+        if 'endorser' in txn["data"]["txn"]["metadata"]:
             endorser = txn["data"]["txn"]["metadata"]["endorser"]
         else:
             endorser = ""
-        txn_from = txn["data"]["txn"]["metadata"]["from"]
+        
+        if 'from' in txn["data"]["txn"]["metadata"]:
+            txn_from = txn["data"]["txn"]["metadata"]["from"]
+        else:
+            txn_from = ""
 
         if txn_type == '1':
             txn_type = 'NYM'
