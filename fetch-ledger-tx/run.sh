@@ -59,6 +59,19 @@ function getVolumeMount() {
   echo "  --volume='${path}:/home/indy/${mountPoint}:Z' "
 }
 
+# fetch_status can have long running commands.
+# Detect any existing containers running the same command and exit.
+runningContainers=$(docker ps | grep fetch_status | awk '{print $1}')
+if [ ! -z "${runningContainers}" ]; then
+  for runningContainer in ${runningContainers}; do
+    runningContainerCmd=$(docker inspect ${runningContainer} | jq -r '.[0]["Config"]["Cmd"][0]')
+    if [[ "${runningContainerCmd}" == "${@}" ]]; then 
+      echo "There is an instance of fetch_status already running the same command.  Please wait for it to complete ..."
+      exit 0
+    fi
+  done
+fi
+
 # Running on Windows?
 if [[ "$OSTYPE" == "msys" ]]; then
   # Prefix interactive terminal commands ...
