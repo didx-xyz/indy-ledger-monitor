@@ -107,7 +107,7 @@ def metrics(maintxr_response, network_name, metrics_log_info, txn_range):
         if txn_seqNo == txn_range[1]:
             break
         # This is to make sure we don't run into the google api rate limit.
-        time.sleep(1)
+        time.sleep(2)
 
     print("\033[1;92;40m" + str(num_of_txn) + " transactions added to " + file_name + " in sheet " + worksheet_name + ".\033[m")
     return(txn_seqNo)
