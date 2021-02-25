@@ -83,7 +83,13 @@ async def get_cred_by_Id(pool: Pool, credId):
     )
     return await pool.submit_request(req)
 
-async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None):
+async def getNYM(pool: Pool, nym):
+    req = build_get_nym_request(
+        None, nym
+    )
+    return await pool.submit_request(req)
+
+async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, nym: str = None):
     pool = await open_pool(transactions_path=genesis_path)
     result = []
 
@@ -108,9 +114,10 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
         response = await get_cred_by_Id(pool, credid)
         print(json.dumps(response, indent=2))
 
-    #TODO Implement get nym request lookup
-    # req = build_get_nym_request(None, NYM)
-    # print("Get revoc reg def request:", req.body)
+    #TODO Add additional query parameters
+    if nym:
+        response = await getNYM(pool, nym)
+        print(json.dumps(response, indent=2))
 
     #TODO Implement revocation lookups
     # revoc_id = (
@@ -176,6 +183,7 @@ if __name__ == "__main__":
     parser.add_argument("-maintx", "--maintx", help="Get a specific transaction number from main ledger.")
     parser.add_argument("-maintxr", "--maintxrange", type=parseNumList, help="Get a range of transactions from main ledger.")
     parser.add_argument("-credid", "--credid", help="Get a specific schema from ledger.")
+    parser.add_argument("-nym", "--nym", help="Get a specific NYM from ledger.")
     parser.add_argument("-a", "--anonymous", action="store_true", help="Perform requests anonymously, without requiring privileged DID seed.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
     args = parser.parse_args()
@@ -214,4 +222,4 @@ if __name__ == "__main__":
         ident = None
 
     # asyncio.get_event_loop().run_until_complete(fetch_status(args.genesis_path, args.nodes, ident, args.status, args.alerts))
-    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid))
+    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid, args.nym))
