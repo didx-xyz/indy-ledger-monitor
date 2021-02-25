@@ -83,6 +83,7 @@ async def get_cred_by_Id(pool: Pool, credId):
     )
     return await pool.submit_request(req)
 
+#TODO Add submitted_did as parameter
 async def getNYM(pool: Pool, nym):
     req = build_get_nym_request(
         None, nym
