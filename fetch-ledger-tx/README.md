@@ -106,6 +106,11 @@ To fetch a credential definition id from the ledger use the `--credid` argument 
 ./run.sh -a --net=<netId> --credid A9Rsuu7FNquw8Ne2Smu5Nr:3:CL:15:tag
 ```
 
+To fetch a NYM from the ledger use the `--nym` argument and provide a NYM;
+``` bash
+./run.sh -a --net=<netId> --nym Uvb86cUzmdgZ8AfbN176tc
+```
+
 For the first test run using von-network:
 
 - the `<SEED>` is the Indy test network Trustee seed: `000000000000000000000000Trustee1`.
