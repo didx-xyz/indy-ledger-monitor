@@ -19,14 +19,9 @@ For more details see the Fetch Ledger Information [readme](fetch-ledger-tx/READM
 
 ## Contributions
 
-Pull requests are welcome! Please read our [contributions guide](CONTRIBUTING.md) and submit your PRs. We enforce developer certificate of origin (DCO) commit signing. See guidance [here](https://github.com/apps/dco).
+Pull requests are welcome!
 
 We also welcome issues submitted about problems you encounter in using the tools within this repo.
-
-## Code of Conduct
-
-All contributors are required to adhere to our [Code of Conduct](CODE_OF_CONDUCT.md) guidelines.
-
 ## License
 
 [Apache License Version 2.0](LICENSE)
