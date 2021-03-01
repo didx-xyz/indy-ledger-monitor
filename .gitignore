@@ -1,4 +1,6 @@
-fetch-ledger-tx/conf/
+**/conf/
+**/log/
+*.env
 
 ###
 ### Python
