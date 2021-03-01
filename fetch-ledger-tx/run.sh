@@ -103,6 +103,10 @@ if [ -d "./ledger_data" ]; then
   cmd+=$(getVolumeMount "./ledger_data")
 fi
 
+if [ -d "./plugins" ]; then
+  cmd+=$(getVolumeMount "./plugins")
+fi
+
 cmd+="fetch_ledger_tx \"$@\""
 eval ${cmd}
 #echo ${cmd}

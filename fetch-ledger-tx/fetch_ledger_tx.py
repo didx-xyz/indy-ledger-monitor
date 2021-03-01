@@ -34,7 +34,7 @@ from indy_vdr.ledger import (
     Request,
 )
 from indy_vdr.pool import Pool, open_pool
-from sovrin_network_metrics import metrics, find_last
+from plugin_collection import PluginCollection
 import time
 
 verbose = False
@@ -90,7 +90,9 @@ async def get_cred_by_Id(pool: Pool, credId):
     )
     return await pool.submit_request(req)
 
-async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, network_name: str = None, metrics_log_only: bool = False, USER_batchsize: int = 0, metrics_log_info: list = []):
+async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, network_name: str = None):
+    while True:
+        try:
 #TODO Add submitted_did as parameter
 async def getNYM(pool: Pool, nym):
     req = build_get_nym_request(
@@ -99,7 +101,12 @@ async def getNYM(pool: Pool, nym):
     return await pool.submit_request(req)
 
 async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, nym: str = None, db: bool = False):
-    pool = await open_pool(transactions_path=genesis_path)
+            pool = await open_pool(transactions_path=genesis_path)
+        except:
+            if verbose: print("Pool Timed Out! Trying again...")
+            continue
+        break
+    
     result = []
 
     if db:
@@ -136,55 +143,6 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
     if maintx:
         maintx_response = await get_txn(pool, int(maintx))
         print(json.dumps(maintx_response, indent=2))
-
-    if metrics_log_only:
-        txn_range = [None] * 2
-        logging_range = [None] * 2 
-        int_USER_batchsize = int(USER_batchsize)
-        MAX_BATCH_SIZE = 100
-        batchsize = 10 # Default amount of txn to fetch from pool
-
-        last_logged_txn = [find_last(metrics_log_info)]                     # Get last txn that was logged
-        txn_range[0] = last_logged_txn[0] + 1                               # Get the next txn: txn_range[next_txn, ledger_size]
-        maintxr_response = await get_txn_range(pool, list(last_logged_txn)) # Run the last logged txn to get ledger size
-        for txn in maintxr_response:
-            txn_range[1] = txn["data"]["ledgerSize"]                        # Get ledger size: txn_range[next_txn, ledger_size]
-        num_of_new_txn = txn_range[1] - txn_range[0] + 1                    # Find how many new txn there are.
-        
-        if num_of_new_txn == 0:                                             # If no new txn exit()
-            print("No New Transactions. Exiting...")
-            exit()
-        
-        if int_USER_batchsize == 0:
-            print("Number of stored logs not specifed. Storing " + str(batchsize) + " logs if avalible.")
-        elif int_USER_batchsize > MAX_BATCH_SIZE:
-            batchsize = MAX_BATCH_SIZE
-            print("The reqested batch size (" + str(int_USER_batchsize) + ") is to large. Setting to " + str(batchsize) + ".")
-        else:
-            batchsize = int_USER_batchsize
-            print("Storing "+ str(batchsize) + " logs if avalible.")
-
-        if num_of_new_txn < batchsize:                                     # Run to the end of the new txn if its less then the log interval
-            logging_range[0] = txn_range[0]
-            logging_range[1] = txn_range[1] + 1
-        else:                                                               # Set log interval to only grab a few tan at a time if there are more txn then batchsize
-            logging_range[0] = txn_range[0]
-            logging_range[1] = txn_range[0] + batchsize
-
-        #------------------- Below won't run unless there are new txns ----------------------------------
-
-        print(str(num_of_new_txn) + " new transactions. Last transaction logged: " + str(last_logged_txn[0]) + " Transaction Range: " + str(txn_range[0]) + "-" + str(txn_range[1]))
-
-        while True:
-            print("Logging transactions " + str(logging_range[0]) + "-" + str(logging_range[1]-1))
-            maintxr_response = await get_txn_range(pool, list(range(logging_range[0],logging_range[1])))
-            txn_seqNo = metrics(maintxr_response, network_name, metrics_log_info, txn_range)
-            if txn_seqNo == txn_range[1]:
-                break
-            logging_range[0] = txn_seqNo + 1
-            logging_range[1] = txn_seqNo + batchsize + 1 # put if here to have end of txxn if at end
-
-        print(str(txn_seqNo) + "/" + str(txn_range[1]) + " Transactions logged! " + str(num_of_new_txn) + " New Transactions. Done!")
     
     if maintxr:
         maintxr_response = await get_txn_range(pool, list(maintxr))
@@ -225,6 +183,8 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
     # req = build_get_schema_object_by_metadata_request(None, "sch", "test", "1.0.0")
     # log("Get rich schema GET request by Metadata:", req.body)
 
+    await monitor_plugins.apply_all_plugins_on_value(result, pool, network_name)
+
 def get_script_dir():
     return os.path.dirname(os.path.realpath(__file__))
 
@@ -252,6 +212,8 @@ def parseNumList(string):
     return list(range(int(start,10), int(end,10)+1))
 
 if __name__ == "__main__":
+    monitor_plugins = PluginCollection('plugins')
+
     parser = argparse.ArgumentParser(description="Fetch transaction related details from indy based ledgers")
     parser.add_argument("--net", choices=list_networks(), help="Connect to a known network using an ID.")
     parser.add_argument("--list-nets", action="store_true", help="List known networks.")
@@ -273,18 +235,13 @@ if __name__ == "__main__":
     parser.add_argument("-db", "--db", help="Dump main ledger transactions to DB")
     parser.add_argument("-a", "--anonymous", action="store_true", help="Perform requests anonymously, without requiring privileged DID seed.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
-    args = parser.parse_args()
+
+    monitor_plugins.get_parse_args(parser)
+    args, unknown = parser.parse_known_args()
 
     verbose = args.verbose
 
-    # Support names and paths containing spaces.
-    # Other workarounds including the standard of putting '"'s around values containing spaces does not always work.
-    if args.json:
-       args.json = ' '.join(args.json)
-    if args.file:
-       args.file = ' '.join(args.file)
-    if args.worksheet:
-       args.worksheet = ' '.join(args.worksheet)
+    monitor_plugins.load_all_parse_args(args)
 
     if args.list_nets:
         print(json.dumps(load_network_list(), indent=2))
@@ -317,15 +274,6 @@ if __name__ == "__main__":
         log("DID:", ident.did, " Verkey:", ident.verkey)
     else:
         ident = None
-
-    metrics_log_info = []
-    if args.mlog:
-        if args.json and args.file and args.worksheet:
-            metrics_log_info = [args.json, args.file, args.worksheet]
-        else:
-            print('Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name.')
-            print('ex: --mlog  --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]')
-            exit()
 
     # asyncio.get_event_loop().run_until_complete(fetch_status(args.genesis_path, args.nodes, ident, args.status, args.alerts))
     asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid, network_name, args.mlog, int(args.batchsize), metrics_log_info, args.nym, args.db))
