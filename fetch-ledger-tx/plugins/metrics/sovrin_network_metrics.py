@@ -57,9 +57,9 @@ class main(plugin_collection.Plugin):
         if self.mlog:
             txn_range = [None] * 2
             logging_range = [None] * 2 
-            int_USER_batchsize = int(self.batchsize)
+            int_batchsize = int(self.batchsize)
             MAX_BATCH_SIZE = 100
-            batchsize = 10 # Default amount of txn to fetch from pool
+            BATCHSIZE = 10 # Default amount of txn to fetch from pool
 
             last_logged_txn = [self.find_last()]                     # Get last txn that was logged
             txn_range[0] = last_logged_txn[0] + 1                               # Get the next txn: txn_range[next_txn, ledger_size]
@@ -72,37 +72,37 @@ class main(plugin_collection.Plugin):
                 print("No New Transactions. Exiting...")
                 exit()
             
-            if int_USER_batchsize == 0:
-                print("Number of stored logs not specifed. Storing " + str(batchsize) + " logs if avalible.")
-            elif int_USER_batchsize > MAX_BATCH_SIZE:
-                batchsize = MAX_BATCH_SIZE
-                print("The reqested batch size (" + str(int_USER_batchsize) + ") is to large. Setting to " + str(batchsize) + ".")
+            if int_batchsize == 0:
+                print(f'Number of stored logs not specifed. Storing {BATCHSIZE} logs if avalible.')
+            elif int_batchsize > MAX_BATCH_SIZE:
+                BATCHSIZE = MAX_BATCH_SIZE
+                print(f'The reqested batch size ({int_batchsize}) is to large. Setting to {BATCHSIZE}.')
             else:
-                batchsize = int_USER_batchsize
-                print("Storing "+ str(batchsize) + " logs if avalible.")
+                BATCHSIZE = int_batchsize
+                print(f'Storing {BATCHSIZE} logs if avalible.')
 
-            if num_of_new_txn < batchsize:                                     # Run to the end of the new txn if its less then the log interval
+            if num_of_new_txn < BATCHSIZE:                                     # Run to the end of the new txn if its less then the log interval
                 logging_range[0] = txn_range[0]
                 logging_range[1] = txn_range[1] + 1
-            else:                                                               # Set log interval to only grab a few tan at a time if there are more txn then batchsize
+            else:                                                               # Set log interval to only grab a few txn's at a time if there are more txn then batchsize
                 logging_range[0] = txn_range[0]
-                logging_range[1] = txn_range[0] + batchsize
+                logging_range[1] = txn_range[0] + BATCHSIZE
 
             #------------------- Below won't run unless there are new txns ----------------------------------
 
-            print(str(num_of_new_txn) + " new transactions. Last transaction logged: " + str(last_logged_txn[0]) + " Transaction Range: " + str(txn_range[0]) + "-" + str(txn_range[1]))
+            print(f'{num_of_new_txn} new transactions. Last transaction logged: {last_logged_txn[0]} Transaction Range: {txn_range[0]}-{txn_range[1]}')
 
             while True:
-                print("Logging transactions " + str(logging_range[0]) + "-" + str(logging_range[1]-1))
+                print(f'Logging transactions {logging_range[0]}-{logging_range[1]-1}')
                 maintxr_response = await get_txn_range(pool, list(range(logging_range[0],logging_range[1])))
                 txn_seqNo = self.metrics(maintxr_response, network_name, txn_range)
                 if txn_seqNo == txn_range[1]:
                     break
                 logging_range[0] = txn_seqNo + 1
-                logging_range[1] = txn_seqNo + batchsize + 1 # put if here to have end of txxn if at end
+                logging_range[1] = txn_seqNo + BATCHSIZE + 1 # put if here to have end of txxn if at end
                 exit()
 
-            print(str(txn_seqNo) + "/" + str(txn_range[1]) + " Transactions logged! " + str(num_of_new_txn) + " New Transactions. Done!")
+            print(f'{txn_seqNo}/{txn_range[1]} Transactions logged! {num_of_new_txn} New Transactions. Done!')
 
 
     def find_last(self):
@@ -127,7 +127,7 @@ class main(plugin_collection.Plugin):
             sheet = authD_client.open(self.file_name).worksheet(self.worksheet_name) # Open sheet
         except:
             print("\033[1;31;40mUnable to upload data to sheet! Please check file and worksheet name and try again.")
-            print("File name entered: " + self.file_name + ". Worksheet name entered: " + self.worksheet_name + ".\033[m")
+            print(f'File name entered: {self.file_name}. Worksheet name entered: {self.worksheet_name}.\033[m')
             exit()
         
         num_of_txn = 0
@@ -211,5 +211,5 @@ class main(plugin_collection.Plugin):
             # This is to make sure we don't run into the google api rate limit.
             time.sleep(2)
 
-        print("\033[1;92;40m" + str(num_of_txn) + " transactions added to " + self.file_name + " in sheet " + self.worksheet_name + ".\033[m")
+        print(f'\033[1;92;40m{num_of_txn} transactions added to {self.file_name} in sheet {self.worksheet_name}.\033[m')
         return(txn_seqNo)

@@ -16,7 +16,7 @@ def gspread_authZ(gauth_json):
     auth_file = find_file(gauth_json)
     if not auth_file:
         print("\033[1;31;40mUnable to find the Google API Credentials json file! Make sure the file is in the './config' folder and name you specified is correct.")
-        print("Json name entered: " + gauth_json + ".\033[m")
+        print(f"Json name entered: {gauth_json}.\033[m")
         exit()
 
     creds = ServiceAccountCredentials.from_json_keyfile_name(auth_file, scope) # Set credentials using json file
@@ -30,5 +30,5 @@ def gspread_authZ(gauth_json):
 #         sheet.append_row(row, value_input_option='USER_ENTERED') # Append sheet
 #     except:
 #         print("\033[1;31;40mUnable to upload data to sheet! Please check file and worksheet name and try again.")
-#         print("File name entered: " + file_name + ". Worksheet name entered: " + worksheet_name + ".\033[m")
+#         print(f'File name entered: {file_name}. Worksheet name entered: {worksheet_name}.\033[m")
 #         exit()
