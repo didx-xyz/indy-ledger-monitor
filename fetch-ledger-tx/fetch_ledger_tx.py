@@ -90,7 +90,7 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
         try:
             pool = await open_pool(transactions_path=genesis_path)
         except:
-            if verbose: print("Pool Timed Out! Trying again...")
+            log("Pool Timed Out! Trying again...")
             continue
         break
     

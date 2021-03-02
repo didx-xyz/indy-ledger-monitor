@@ -61,15 +61,14 @@ class main(plugin_collection.Plugin):
             MAX_BATCH_SIZE = 100
             BATCHSIZE = 10 # Default amount of txn to fetch from pool
 
-            last_logged_txn = [self.find_last()]                     # Get last txn that was logged
-            txn_range[0] = last_logged_txn[0] + 1                               # Get the next txn: txn_range[next_txn, ledger_size]
+            last_logged_txn = [self.find_last()]                                # Get last txn that was logged
+            txn_range[0] = last_logged_txn[0] + 1                               # Get the next txn: txn_range[*next_txn, ledger_size]
             maintxr_response = await get_txn_range(pool, list(last_logged_txn)) # Run the last logged txn to get ledger size
-            for txn in maintxr_response:
-                txn_range[1] = txn["data"]["ledgerSize"]                        # Get ledger size: txn_range[next_txn, ledger_size]
+            txn_range[1] = maintxr_response[0]["data"]["ledgerSize"]            # Get ledger size: txn_range[next_txn, *ledger_size]
             num_of_new_txn = txn_range[1] - txn_range[0] + 1                    # Find how many new txn there are.
-            
+
             if num_of_new_txn == 0:                                             # If no new txn exit()
-                print("No New Transactions. Exiting...")
+                print("No New Transactions. Exiting...") 
                 exit()
             
             if int_batchsize == 0:
@@ -91,7 +90,6 @@ class main(plugin_collection.Plugin):
             #------------------- Below won't run unless there are new txns ----------------------------------
 
             print(f'{num_of_new_txn} new transactions. Last transaction logged: {last_logged_txn[0]} Transaction Range: {txn_range[0]}-{txn_range[1]}')
-
             while True:
                 print(f'Logging transactions {logging_range[0]}-{logging_range[1]-1}')
                 maintxr_response = await get_txn_range(pool, list(range(logging_range[0],logging_range[1])))
@@ -101,39 +99,31 @@ class main(plugin_collection.Plugin):
                 logging_range[0] = txn_seqNo + 1
                 logging_range[1] = txn_seqNo + BATCHSIZE + 1 # put if here to have end of txxn if at end
                 exit()
-
             print(f'{txn_seqNo}/{txn_range[1]} Transactions logged! {num_of_new_txn} New Transactions. Done!')
 
 
     def find_last(self):
         authD_client = gspread_authZ(self.gauth_json)
-
         sheet = authD_client.open(self.file_name).worksheet(self.worksheet_name)
-
         first_row = sheet.row_values(2)
-
         if not first_row:
             sheet.delete_row(2)
             self.find_last()
         else:
             last = int(first_row[0]) # returns as str casting to int
-
         return(last)
 
     def metrics(self, maintxr_response, network_name, txn_range):
         authD_client = gspread_authZ(self.gauth_json)
-
         try:
             sheet = authD_client.open(self.file_name).worksheet(self.worksheet_name) # Open sheet
         except:
             print("\033[1;31;40mUnable to upload data to sheet! Please check file and worksheet name and try again.")
             print(f'File name entered: {self.file_name}. Worksheet name entered: {self.worksheet_name}.\033[m')
             exit()
-        
         num_of_txn = 0
 
         for txn in maintxr_response:
-
             REVOC_REG_ENTRY = 0
             REVOC_REG_DEF = 0 
             CLAIM_DEF = 0
@@ -147,7 +137,7 @@ class main(plugin_collection.Plugin):
             if 'txnTime' in txn["data"]["txnMetadata"]:
                 txn_time_epoch = txn["data"]["txnMetadata"]["txnTime"]
                 txn_time = datetime.datetime.fromtimestamp(txn_time_epoch).strftime('%Y-%m-%d %H:%M:%S') # formated to 12-3-2020 21:27:49
-                txn_date = datetime.datetime.fromtimestamp(txn_time_epoch).strftime('%Y-%m-%d') # formated to 12-3-2020 21:27:49
+                txn_date = datetime.datetime.fromtimestamp(txn_time_epoch).strftime('%Y-%m-%d') # formated to 12-3-2020
             else:
                 txn_time, txn_date = "", ""
             
