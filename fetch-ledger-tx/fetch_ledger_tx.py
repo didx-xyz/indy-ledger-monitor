@@ -9,6 +9,7 @@ import datetime
 import urllib.request
 import re
 from typing import Tuple
+import pickledb
 
 import nacl.signing
 from indy_vdr.bindings import version
@@ -35,6 +36,10 @@ from indy_vdr.ledger import (
 from indy_vdr.pool import Pool, open_pool
 
 verbose = False
+
+def con_db():
+    db = pickledb.load('./indy_pickle.db', False)
+    return db
 
 def log(*args):
     if verbose:
@@ -90,9 +95,31 @@ async def getNYM(pool: Pool, nym):
     )
     return await pool.submit_request(req)
 
-async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, nym: str = None):
+async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, nym: str = None, db: bool = False):
     pool = await open_pool(transactions_path=genesis_path)
     result = []
+
+    if db:
+        db = con_db()
+        # Check if we have any previous records in DB
+        print(db.getall())
+        if len(db.getall()) == 0:
+            print('New database, start dumping transactions from tx 0')
+            db.set('0','No TX')
+            maintxr_response = await get_txn_range(pool, list(range(1,10)))
+            for tx in maintxr_response:
+                print(tx['seqNo'])
+                db.set(json.dumps(tx['seqNo']), json.dumps(tx))
+            #"data": null,
+        else:
+            maintxr_response = await get_txn_range(pool, list(maintxr))
+            #print(json.dumps(maintxr_response, indent=2))
+            print(json.dumps(maintx_response['seqNo'], indent=2))
+            db.set(json.dumps(maintx_response['seqNo']), json.dumps(maintx_response))
+
+        print(db.getall())
+        # Save DB
+        print('Saving PickleDB Results: {}'.format(db.dump()))
 
     if schemaid:
         # "QXdMLmAKZmQBhnvXHxKn78:2:SURFNetSchema:1.0"
@@ -185,6 +212,7 @@ if __name__ == "__main__":
     parser.add_argument("-maintxr", "--maintxrange", type=parseNumList, help="Get a range of transactions from main ledger.")
     parser.add_argument("-credid", "--credid", help="Get a specific credential definition from ledger.")
     parser.add_argument("-nym", "--nym", help="Get a specific NYM from ledger.")
+    parser.add_argument("-db", "--db", help="Dump main ledger transactions to DB")
     parser.add_argument("-a", "--anonymous", action="store_true", help="Perform requests anonymously, without requiring privileged DID seed.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
     args = parser.parse_args()
@@ -223,4 +251,4 @@ if __name__ == "__main__":
         ident = None
 
     # asyncio.get_event_loop().run_until_complete(fetch_status(args.genesis_path, args.nodes, ident, args.status, args.alerts))
-    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid, args.nym))
+    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid, args.nym, args.db))
