@@ -190,3 +190,7 @@ $RECYCLE.BIN/
 # Docs build
 _build/
 **/*.iml
+
+# DB files
+**/*.json
+**/*.db
