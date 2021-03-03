@@ -58,5 +58,10 @@ if [ -d "./plugins" ]; then
   cmd+=$(getVolumeMount "./plugins")
 fi
 
+
+if [ -d "./ledger_data" ]; then
+  cmd+=$(getVolumeMount "./ledger_data")
+fi
+
 cmd+="fetch_status \"$@\""
 eval ${cmd}

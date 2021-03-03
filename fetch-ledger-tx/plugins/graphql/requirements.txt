@@ -1,0 +1,6 @@
+graphene
+fastapi
+starlette
+uvicorn
+tinydb
+pickledb
