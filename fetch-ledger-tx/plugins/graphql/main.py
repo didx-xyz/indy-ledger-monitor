@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from starlette.graphql import GraphQLApp
-from schema import Query
+from schema import schema
 import graphene
 
 app = FastAPI()
 
-app.add_route('/graphql', GraphQLApp(schema=graphene.Schema(query=Query)))
+app.add_route('/graphql', GraphQLApp(schema=schema))
 
 @app.get('/')
 def ping():
