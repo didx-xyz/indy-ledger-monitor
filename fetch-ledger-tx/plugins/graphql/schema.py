@@ -3,8 +3,6 @@ from tinydb import TinyDB, Query as DbQuery
 import datetime
 import json
 
-
-
 db = TinyDB('../../ledger_data/indy_tinydb.json')
 
 class Transaction(Interface):
@@ -95,6 +93,8 @@ class DID(ObjectType):
 
     created_schema = List(lambda : Schema)
 
+    created_cred = List(lambda: CredDef)
+
     nym_txn = Field(lambda: NymTxn)
 
 
@@ -112,6 +112,17 @@ class DID(ObjectType):
             schema["id"] = txn["data"]["txnMetadata"]["txnId"]
             schemas.append(schema)
         return schemas
+
+    def resolve_created_cred(parent, info):
+        TXN = DbQuery()
+        cred_txns = db.search((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "102"))
+        creds = []
+        ## TODO create common cred parsing
+        for txn in cred_txns:
+            cred = txn["data"]["txn"]["data"]["data"]
+            cred["id"] = txn["data"]["txnMetadata"]["txnId"]
+            creds.append(cred)
+        return creds
 
     # def resolve_verkey(parent, info):
     #     return parent["verkey"]
@@ -159,10 +170,42 @@ class SchemaTxn(ObjectType):
     def resolve_schema(parent, info):
         schema = parent["data"]["txn"]["data"]["data"]
         schema["id"] = parent["data"]["txnMetadata"]["txnId"]
+        return schema
+
+
+class CredDef(ObjectType):
+    id = String(required=True)
+    cred_txn = Field(lambda : CredDefTxn)
+    primary = List(String)
+    revocation = List(String)
+
+    creator = Field(lambda : DID)
+
+    def resolve_cred_txn(parent, info):
+        TXN = DbQuery()
+        return db.get(TXN["data"]["txnMetadata"]["txnId"] == parent["id"])
+
+    ## TODO Would be good to traverse graphQl here rather than 2 db queries
+    def resolve_creator(parent, info):
+        TXN = DbQuery()
+        # txn = db.get(TXN["data"]["txnMetadata"]["txnId"] == parent["id"])
+
+        did = parent["id"].split(":")[0]
+
+        nymTxn = db.get(TXN["data"]["txn"]["data"]['dest'] == did)
+        return nymTxn['data']['txn']['data']
 
 class CredDefTxn(ObjectType):
     class Meta:
         interfaces = (Transaction, )
+
+        cred = Field(lambda: CredDef)
+
+        def resolve_cred(parent, info):
+            cred = parent["data"]["txn"]["data"]["data"]
+            cred["id"] = parent["data"]["txnMetadata"]["txnId"]
+            print(cred)
+            return cred
 
 class NymTxn(ObjectType):
     class Meta:
@@ -192,14 +235,9 @@ class Query(ObjectType):
 
     get_schema = Field(Schema, id=String())
 
-    get_creddef_by_id = Field(Transaction, did=String(required=True))
-
-    get_revoc_by_id = Field(Transaction, did=String(required=True))
-
+    get_cred = Field(CredDef, id=String())
 
     # nym_by_did = Field(NymTxn, did=String(required=True))
-
-    # get_by_did = Field(DID, id=ID)
 
     @staticmethod
     def resolve_say_hello(parent, info, name):
@@ -222,7 +260,7 @@ class Query(ObjectType):
         return result['data']['txn']['data']
 
     def resolve_get_schema(self,info, id):
-
+        ## TODO Extract tx time from metadata
         print(id)
         TXN = DbQuery()
         result = db.get(TXN["data"]["txnMetadata"]["txnId"] == id)
@@ -232,13 +270,15 @@ class Query(ObjectType):
 
         return schema
 
-    def resolve_get_creddef_by_id(self,info, creddef):
+    def resolve_get_cred(self,info, id):
+        ## TODO Extract tx time from metadata
+        print(id)
         TXN = DbQuery()
-        return db.search(TXN['seqNo'] == creddef)[0]
+        result = db.get(TXN["data"]["txnMetadata"]["txnId"] == id)
+        print(result)
+        cred = result["data"]["txn"]["data"]["data"]
+        cred["id"] = result["data"]["txnMetadata"]["txnId"]
 
-    def resolve_get_revoc_by_id(self,info, revoc):
+        return cred
 
-        TXN = DbQuery()
-        return db.search(TXN['seqNo'] == revoc)[0]
-
-schema = GqSchema(query=Query, types=[BaseTxn, NymTxn, DID, Schema, SchemaTxn])
+schema = GqSchema(query=Query, types=[BaseTxn, NymTxn, DID, Schema, SchemaTxn, CredDef, CredDefTxn])
