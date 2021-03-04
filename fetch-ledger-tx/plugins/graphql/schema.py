@@ -1,10 +1,14 @@
 from graphene import String, ObjectType, List, Field, Int, ID, Boolean, Interface, Schema as GqSchema
 from tinydb import TinyDB, Query as DbQuery
+from tinydb.storages import JSONStorage
+from tinydb.middlewares import CachingMiddleware
+
 import datetime
 import json
 from helpers import create_cred_def_from_data, create_schema_from_data
 
-db = TinyDB('../../ledger_data/indy_tinydb.json')
+db = TinyDB('../../ledger_data/indy_tinydb.json', storage=CachingMiddleware(JSONStorage))
+# db = TinyDB('../../ledger_data/indy_tinydb.json')
 
 class Transaction(Interface):
     seqNo = ID(required=True)
