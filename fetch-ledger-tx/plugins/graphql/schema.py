@@ -72,6 +72,10 @@ class Transaction(Interface):
 class TransactionConnection(relay.Connection):
     class Meta:
         node = Transaction
+    count = Int()
+
+    def resolve_count(root, info):
+        return len(root.edges)
 
 class AttribTxn(ObjectType):
     class Meta:
@@ -276,7 +280,7 @@ class DID(ObjectType):
     created_dids = List(lambda : DID)
     created_dids_count = Int()
 
-    created_definitions = List(lambda: CredDef)
+    created_definitions = relay.ConnectionField(CredDefConnection)
 
     created_definitions_count = Int()
 
