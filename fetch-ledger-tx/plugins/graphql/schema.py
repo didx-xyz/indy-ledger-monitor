@@ -8,7 +8,6 @@ import json
 from helpers import create_cred_def_from_data, create_schema_from_data
 
 db = TinyDB('../../ledger_data/indy_tinydb.json', storage=CachingMiddleware(JSONStorage))
-# db = TinyDB('../../ledger_data/indy_tinydb.json')
 
 class Transaction(Interface):
     seqNo = ID(required=True)
@@ -66,7 +65,6 @@ class Transaction(Interface):
         else:
             txn_time, txn_date = "", ""
             return txn_time
-
 
 class DID(ObjectType):
     did = ID(required=True)
@@ -209,7 +207,6 @@ class Schema(ObjectType):
 
         return db.count(TXN["data"]["txn"]["data"]["ref"] == schema_txn["seqNo"])
 
-
 class SchemaTxn(ObjectType):
     class Meta:
         interfaces = (Transaction, )
@@ -219,7 +216,6 @@ class SchemaTxn(ObjectType):
     def resolve_schema(parent, info):
 
         return create_schema_from_data(parent)
-
 
 class CredDef(ObjectType):
     id = String(required=True)
@@ -274,7 +270,6 @@ class CredDefTxn(ObjectType):
 
         def resolve_cred(parent, info):
             return create_cred_def_from_data(parent)
-
 
 class NymTxn(ObjectType):
     class Meta:
