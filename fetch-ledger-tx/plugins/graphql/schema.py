@@ -1,4 +1,4 @@
-from graphene import String, ObjectType, List, Field, Int, ID, Boolean, Interface, Schema as GqSchema, relay
+from graphene import String, ObjectType, List, Field, Int, ID, Boolean, Interface, Schema as GqSchema, relay, DateTime
 from tinydb import TinyDB, Query as DbQuery
 from tinydb.storages import JSONStorage
 from tinydb.middlewares import CachingMiddleware
@@ -9,13 +9,17 @@ from helpers import create_cred_def_from_data, create_schema_from_data
 
 db = TinyDB('../../ledger_data/indy_tinydb.json', storage=CachingMiddleware(JSONStorage))
 
+
+
 class Transaction(Interface):
+    class Meta:
+        interfaces = (relay.Node, )
     seqNo = ID(required=True)
     reqId = String(required=True)
     txn_type = String()
     endorser = Field(lambda: NymTxn)
     author = Field(lambda: NymTxn)
-    txn_time = String()
+    txn_time = DateTime()
 
     def resolve_txn_type(parent, info):
         return parent["data"]["txn"]["meta"]
@@ -26,6 +30,8 @@ class Transaction(Interface):
 
         if type == "1":
             return NymTxn
+        elif type == "100":
+            return AttribTxn
         elif type == "101":
             return SchemaTxn
         elif type == "102":
@@ -58,180 +64,59 @@ class Transaction(Interface):
     def resolve_txn_time(parent, info):
         if 'txnTime' in parent["data"]["txnMetadata"]:
             txn_time_epoch = parent["data"]["txnMetadata"]["txnTime"]
-            txn_time = datetime.datetime.fromtimestamp(txn_time_epoch).strftime('%Y-%m-%d %H:%M:%S') # formated to 12-3-2020 21:27:49
-            txn_date = datetime.datetime.fromtimestamp(txn_time_epoch).strftime('%Y-%m-%d') # formated to 12-3-2020
-            print('TIME IS: ', txn_date)
-            return txn_time
+            return datetime.datetime.fromtimestamp(txn_time_epoch)
         else:
-            txn_time, txn_date = "", ""
-            return txn_time
+            return None
 
+class TransactionConnection(relay.Connection):
+    class Meta:
+        node = Transaction
 
+class AttribTxn(ObjectType):
+    class Meta:
+        interfaces = (Transaction, )
+    attribute = Field(lambda :Attribute)
 
-class DID(ObjectType):
+    def resolve_attribute(parent, info):
+        attrib =  parent["data"]["txn"]["data"]["dest"]
+        attrib["seqNo"] = parent["seqNo"]
+
+class Attribute(ObjectType):
     class Meta:
         interfaces = (relay.Node, )
-    did = ID(required=True)
-    # id_from = ID()
-    # id_dest = ID()
-    verkey = String(required=True)
-    txns_authored = List(lambda: Transaction)
-    role = String()
-    alias = String()
-    # schema
-    # cred_def
-    attributes = List(lambda : Attribute)
-
-    created_schema = List(lambda : Schema)
-
-    created_dids = List(lambda : DID)
-    created_dids_count = Int()
-
-    created_definitions = List(lambda: CredDef)
-
-    created_definitions_count = Int()
-
-    created_schema_count = Int()
-
-    nym_txn = Field(lambda: NymTxn)
-
+    endpoint = String()
+    raw = String()
+    did = Field(lambda : DID)
+    attrib_txn = Field(lambda: AttribTxn)
 
     def resolve_did(parent, info):
-        print("ID", parent)
-        return parent['dest']
-
-    def resolve_created_dids(parent, info):
         TXN = DbQuery()
+        result = db.get((TXN['data']['txn']['data']['dest'] == parent["dest"]) & (TXN['data']['txn']['type'] == "1"))
+        return result['data']['txn']['data']
 
-        did_txns = db.search((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "1"))
-        dids = []
-        for txn in did_txns:
-            did = txn["data"]["txn"]["data"]
-            dids.append(did)
-        return dids
-
-    def resolve_created_dids_count(parent, info):
+    def resolve_attrib_txn(parent, info):
         TXN = DbQuery()
+        return db.get(TXN["seqNo"] == parent["seqNo"])
 
-        return db.count((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "1"))
-
-    def resolve_created_schema(parent, info):
-        TXN = DbQuery()
-        schema_txns = db.search((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "101"))
-        schemas = []
-        ## TODO create common schema parsing
-        for txn in schema_txns:
-            schema = create_schema_from_data(txn)
-            schemas.append(schema)
-        return schemas
-
-    def resolve_created_schema_count(parent, info):
-        TXN = DbQuery()
-        return db.count((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "101"))
-
-    def resolve_created_definitions(parent, info):
-        TXN = DbQuery()
-        cred_txns = db.search((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "102"))
-        creds = []
-        ## TODO create common cred parsing
-        for txn in cred_txns:
-            cred = create_cred_def_from_data(txn)
-            creds.append(cred)
-        return creds
-
-    def resolve_created_definitions_count(parent, info):
-        TXN = DbQuery()
-        return db.count((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "102"))
-    # def resolve_verkey(parent, info):
-    #     return parent["verkey"]
-
-    def resolve_txns_authored(parent, info):
-        TXN = DbQuery()
-        return db.search(TXN["data"]["txn"]["metadata"]['from'] == parent["dest"])
-
-    def resolve_nym_txn(parent, info):
-        TXN = DbQuery()
-        result = db.get(TXN["data"]["txn"]["data"]['dest'] == parent['dest'])
-        print(result)
-        return result
-
-    def resolve_attributes(parent, info):
-        TXN = DbQuery()
-        attr_txns = db.search((TXN["data"]["txn"]["data"]["dest"] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "100"))
-
-        attrs = []
-        for txn in attr_txns:
-            attrs.append(txn["data"]["txn"]["data"])
-
-        return attrs
-
-class DIDConnection(relay.Connection):
+class AttributeConnection(relay.Connection):
     class Meta:
-        node = DID
+        node = Attribute
     count = Int()
 
     def resolve_count(root, info):
         return len(root.edges)
 
 
-class Schema(ObjectType):
-    id = String(required=True)
-    schema_txn = Field(lambda : SchemaTxn)
-    attr_names = List(String)
-    name = String(required=True)
-    version = String(required=True)
 
-    creator = Field(lambda : DID)
 
-    definitions = List(lambda : CredDef)
 
-    definitions_count = Int()
 
-    def resolve_schema_txn(parent, info):
-        TXN = DbQuery()
-        return db.get(TXN["data"]["txnMetadata"]["txnId"] == parent["id"])
 
-    def resolve_creator(parent, info):
-        TXN = DbQuery()
-        # txn = db.get(TXN["data"]["txnMetadata"]["txnId"] == parent["id"])
-
-        did = parent["id"].split(":")[0]
-
-        nymTxn = db.get((TXN["data"]["txn"]["data"]['dest'] == did) & (TXN['data']['txn']['type'] == "1"))
-        return nymTxn['data']['txn']['data']
-
-    def resolve_definitions(parent, info):
-        TXN = DbQuery()
-
-        schema_txn = db.get(TXN["data"]["txnMetadata"]["txnId"] == parent["id"])
-
-        cred_def_txns = db.search(TXN["data"]["txn"]["data"]["ref"] == schema_txn["seqNo"])
-        cred_defs =[]
-        for txn in cred_def_txns:
-            cred_def = create_cred_def_from_data(txn)
-            cred_defs.append(cred_def)
-
-        return cred_defs
-
-    def resolve_definitions_count(parent, info):
-        TXN = DbQuery()
-
-        schema_txn = db.get(TXN["data"]["txnMetadata"]["txnId"] == parent["id"])
-
-        return db.count(TXN["data"]["txn"]["data"]["ref"] == schema_txn["seqNo"])
-
-class SchemaTxn(ObjectType):
-    class Meta:
-        interfaces = (Transaction, )
-
-    schema = Field(lambda : Schema)
-
-    def resolve_schema(parent, info):
-
-        return create_schema_from_data(parent)
 
 class CredDef(ObjectType):
-    id = String(required=True)
+    class Meta:
+        interfaces = (relay.Node, )
+    id = ID(required=True)
     cred_txn = Field(lambda : CredDefTxn)
     ## TODO Maybe model the crypto
     # primary = List(String)
@@ -265,15 +150,16 @@ class CredDef(ObjectType):
         schema_txn = db.get(TXN["seqNo"] == parent["schema_ref"])
         return create_schema_from_data(schema_txn)
 
-class Attribute(ObjectType):
-    endpoint = String()
-    raw = String()
-    did = Field(lambda : DID)
 
-    def resolve_did(parent, info):
-        TXN = DbQuery()
-        result = db.get((TXN['data']['txn']['data']['dest'] == parent["dest"]) & (TXN['data']['txn']['type'] == "1"))
-        return result['data']['txn']['data']
+
+
+class CredDefConnection(relay.Connection):
+    class Meta:
+        node = CredDef
+
+    count = Int()
+    def resolve_count(root, info):
+        return len(root.edges)
 
 class CredDefTxn(ObjectType):
     class Meta:
@@ -283,6 +169,74 @@ class CredDefTxn(ObjectType):
 
         def resolve_cred(parent, info):
             return create_cred_def_from_data(parent)
+
+class Schema(ObjectType):
+    class Meta:
+        interfaces = (relay.Node, )
+    id = ID(required=True)
+    schema_txn = Field(lambda : SchemaTxn)
+    attr_names = List(String)
+    name = String(required=True)
+    version = String(required=True)
+
+    creator = Field(lambda : DID)
+
+    definitions = relay.ConnectionField(CredDefConnection)
+
+    definitions_count = Int()
+
+    def resolve_schema_txn(parent, info):
+        TXN = DbQuery()
+        return db.get(TXN["data"]["txnMetadata"]["txnId"] == parent["id"])
+
+    def resolve_creator(parent, info):
+        TXN = DbQuery()
+        # txn = db.get(TXN["data"]["txnMetadata"]["txnId"] == parent["id"])
+
+        did = parent["id"].split(":")[0]
+
+        nymTxn = db.get((TXN["data"]["txn"]["data"]['dest'] == did) & (TXN['data']['txn']['type'] == "1"))
+        return nymTxn['data']['txn']['data']
+
+    def resolve_definitions(parent, info, **kwargs):
+        TXN = DbQuery()
+
+        schema_txn = db.get(TXN["data"]["txnMetadata"]["txnId"] == parent["id"])
+
+        cred_def_txns = db.search(TXN["data"]["txn"]["data"]["ref"] == schema_txn["seqNo"])
+        cred_defs =[]
+        for txn in cred_def_txns:
+            cred_def = create_cred_def_from_data(txn)
+            cred_defs.append(cred_def)
+
+        return cred_defs
+
+    def resolve_definitions_count(parent, info):
+        TXN = DbQuery()
+
+        schema_txn = db.get(TXN["data"]["txnMetadata"]["txnId"] == parent["id"])
+
+        return db.count(TXN["data"]["txn"]["data"]["ref"] == schema_txn["seqNo"])
+
+class SchemaConnection(relay.Connection):
+    class Meta:
+        node = Schema
+    count = Int()
+
+    def resolve_count(root, info):
+        return len(root.edges)
+
+
+class SchemaTxn(ObjectType):
+    class Meta:
+        interfaces = (Transaction, )
+
+    schema = Field(lambda : Schema)
+
+    def resolve_schema(parent, info):
+
+        return create_schema_from_data(parent)
+
 
 class NymTxn(ObjectType):
     class Meta:
@@ -302,8 +256,115 @@ class BaseTxn(ObjectType):
     def resolve_data(parent, info):
         return parent['data']
 
+class DID(ObjectType):
+    class Meta:
+        interfaces = (relay.Node, )
+    did = ID(required=True)
+    # id_from = ID()
+    # id_dest = ID()
+    verkey = String(required=True)
+    authored_txns = relay.ConnectionField(TransactionConnection)
+    role = String()
+    alias = String()
+    # schema
+    # cred_def
+    attributes = relay.ConnectionField(AttributeConnection)
+
+    created_schema = relay.ConnectionField(SchemaConnection)
+
+    created_dids = List(lambda : DID)
+    created_dids_count = Int()
+
+    created_definitions = List(lambda: CredDef)
+
+    created_definitions_count = Int()
+
+    created_schema_count = Int()
+
+    nym_txn = Field(lambda: NymTxn)
+
+
+    def resolve_did(parent, info):
+        print("ID", parent)
+        return parent['dest']
+
+    def resolve_created_dids(parent, info):
+        TXN = DbQuery()
+
+        did_txns = db.search((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "1"))
+        dids = []
+        for txn in did_txns:
+            did = txn["data"]["txn"]["data"]
+            dids.append(did)
+        return dids
+
+    def resolve_created_dids_count(parent, info):
+        TXN = DbQuery()
+
+        return db.count((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "1"))
+
+    def resolve_created_schema(parent, info, **kwargs):
+        TXN = DbQuery()
+        schema_txns = db.search((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "101"))
+        schemas = []
+        ## TODO create common schema parsing
+        for txn in schema_txns:
+            schema = create_schema_from_data(txn)
+            schemas.append(schema)
+        return schemas
+
+    def resolve_created_schema_count(parent, info):
+        TXN = DbQuery()
+        return db.count((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "101"))
+
+    def resolve_created_definitions(parent, info):
+        TXN = DbQuery()
+        cred_txns = db.search((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "102"))
+        creds = []
+        ## TODO create common cred parsing
+        for txn in cred_txns:
+            cred = create_cred_def_from_data(txn)
+            creds.append(cred)
+        return creds
+
+    def resolve_created_definitions_count(parent, info):
+        TXN = DbQuery()
+        return db.count((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "102"))
+    # def resolve_verkey(parent, info):
+    #     return parent["verkey"]
+
+    def resolve_authored_txns(parent, info):
+        TXN = DbQuery()
+        return db.search(TXN["data"]["txn"]["metadata"]['from'] == parent["dest"])
+
+    def resolve_nym_txn(parent, info):
+        TXN = DbQuery()
+        result = db.get(TXN["data"]["txn"]["data"]['dest'] == parent['dest'])
+        print(result)
+        return result
+
+    def resolve_attributes(parent, info, **kwargs):
+        TXN = DbQuery()
+        attr_txns = db.search((TXN["data"]["txn"]["data"]["dest"] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "100"))
+
+        attrs = []
+        for txn in attr_txns:
+            attrib = txn["data"]["txn"]["data"]
+            attrib["seqNo"] = txn["seqNo"]
+            attrs.append(attrib)
+
+        return attrs
+
+class DIDConnection(relay.Connection):
+    class Meta:
+        node = DID
+    count = Int()
+
+    def resolve_count(root, info):
+        return len(root.edges)
+
 class Query(ObjectType):
-    get_txns = List(Transaction)
+    get_txns = relay.ConnectionField(TransactionConnection, author=String())
 
     get_txn_by_id = Field(Transaction, seqNo=Int(required=True))
 
@@ -313,13 +374,23 @@ class Query(ObjectType):
 
     get_definition = Field(CredDef, id=String())
 
-    dids = relay.ConnectionField(DIDConnection)
+    dids = relay.ConnectionField(DIDConnection, endorser=String())
+
+    schemas = relay.ConnectionField(SchemaConnection, author=String(), endorser=String())
+
+    definitions = relay.ConnectionField(CredDefConnection)
 
     # nym_by_did = Field(NymTxn, did=String(required=True))
 
     def resolve_dids(root, info, **kwargs):
         TXN = DbQuery()
-        nym_txns = db.search((TXN['data']['txn']['type'] == "1"))
+        nym_txns = None
+        if "endorser" in kwargs:
+            print(kwargs["endorser"])
+            nym_txns= db.search((TXN['data']['txn']['type'] == "1") & (TXN["data"]["txn"]["metadata"]["endorser"] == kwargs["endorser"]))
+        else:
+            nym_txns = db.search((TXN['data']['txn']['type'] == "1"))
+
         dids = []
         for txn in nym_txns:
             dids.append(txn["data"]["txn"]["data"])
@@ -327,11 +398,43 @@ class Query(ObjectType):
         return dids
 
 
+    def resolve_schemas(self, info, **kwargs):
+        TXN = DbQuery()
+        schema_txns = None
+        ## TODO need a better way to handle multiple args into a single query
+        # I dont like this approach
+        if "endorser" in kwargs and "author" in kwargs:
+            schema_txns= db.search((TXN['data']['txn']['type'] == "101") & (TXN["data"]["txn"]["metadata"]["endorser"] == kwargs["endorser"]) & (TXN["data"]["txn"]["metadata"]["from"] == kwargs["author"]))
 
-    def resolve_get_txns(self, info):
-        results = []        # Create a list of Dictionary objects to return
-        results = db.all()
-        return results
+        elif "endorser" in kwargs:
+            schema_txns= db.search((TXN['data']['txn']['type'] == "101") & (TXN["data"]["txn"]["metadata"]["endorser"] == kwargs["endorser"]))
+        elif "author" in kwargs:
+            schema_txns= db.search((TXN['data']['txn']['type'] == "101") & (TXN["data"]["txn"]["metadata"]["from"] == kwargs["author"]))
+        else:
+            schema_txns = db.search((TXN['data']['txn']['type'] == "101"))
+
+        schemas = []
+        for txn in schema_txns:
+            schemas.append(create_schema_from_data(txn))
+
+        return schemas
+
+    def resolve_definitions(self, info, **kwargs):
+        TXN = DbQuery()
+        def_txns = db.search((TXN['data']['txn']['type'] == "101"))
+
+        defs = []
+        for txn in def_txns:
+            defs.append(create_cred_def_from_data(txn))
+
+        return defs
+
+    def resolve_get_txns(self, info, **kwargs):
+        TXN = DbQuery()
+        if "author" in kwargs:
+            return db.search(TXN["data"]["txn"]["metadata"]['from'] == kwargs["author"])
+        else:
+            return db.all()
 
     def resolve_get_txn_by_id(self,info, seqNo):
         TXN = DbQuery()
@@ -360,4 +463,5 @@ class Query(ObjectType):
 
         return create_cred_def_from_data(result)
 
-schema = GqSchema(query=Query, types=[BaseTxn, NymTxn, DID, Schema, SchemaTxn, CredDef, CredDefTxn])
+schema = GqSchema(query=Query, types=[BaseTxn, NymTxn, DID, Schema, SchemaTxn, CredDef, CredDefTxn, DIDConnection])
+
