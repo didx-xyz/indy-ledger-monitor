@@ -1,4 +1,4 @@
-from graphene import String, ObjectType, List, Field, Int, ID, Boolean, Interface, Schema as GqSchema
+from graphene import String, ObjectType, List, Field, Int, ID, Boolean, Interface, Schema as GqSchema, relay
 from tinydb import TinyDB, Query as DbQuery
 from tinydb.storages import JSONStorage
 from tinydb.middlewares import CachingMiddleware
@@ -67,7 +67,11 @@ class Transaction(Interface):
             txn_time, txn_date = "", ""
             return txn_time
 
+
+
 class DID(ObjectType):
+    class Meta:
+        interfaces = (relay.Node, )
     did = ID(required=True)
     # id_from = ID()
     # id_dest = ID()
@@ -161,6 +165,15 @@ class DID(ObjectType):
             attrs.append(txn["data"]["txn"]["data"])
 
         return attrs
+
+class DIDConnection(relay.Connection):
+    class Meta:
+        node = DID
+    count = Int()
+
+    def resolve_count(root, info):
+        return len(root.edges)
+
 
 class Schema(ObjectType):
     id = String(required=True)
@@ -301,11 +314,20 @@ class Query(ObjectType):
 
     get_definition = Field(CredDef, id=String())
 
+    dids = relay.ConnectionField(DIDConnection)
+
     # nym_by_did = Field(NymTxn, did=String(required=True))
 
-    @staticmethod
-    def resolve_say_hello(parent, info, name):
-        return f'Hello {name}'
+    def resolve_dids(root, info, **kwargs):
+        TXN = DbQuery()
+        nym_txns = db.search((TXN['data']['txn']['type'] == "1"))
+        dids = []
+        for txn in nym_txns:
+            dids.append(txn["data"]["txn"]["data"])
+
+        return dids
+
+
 
     def resolve_get_txns(self, info):
         results = []        # Create a list of Dictionary objects to return
