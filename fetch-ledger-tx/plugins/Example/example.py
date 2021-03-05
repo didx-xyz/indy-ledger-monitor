@@ -12,7 +12,7 @@ class main(plugin_collection.Plugin):
     def __init__(self, example: bool = False):
         # Below is required in order to diferecate between plug-ins 
         super().__init__()
-        self.index = 4
+        self.index = -1 # Set to -1 to disable plug-in.
         self.name = 'Example Plug-in'
         self.description = ''
         self.type = ''
@@ -24,7 +24,7 @@ class main(plugin_collection.Plugin):
 
     # Declear your parser arguments here. This will get them and add them to the fetch_status.py parser arguments
     # and allow them to come up in the help flag.
-    def parse_args(self, parser, argv=None, example: bool = False):
+    def parse_args(self, parser, argv=None):
         parser.add_argument("--example", action="store_true", help="Runs expample plug-in")
 
     # Here you set your variables with the arguments from the parser

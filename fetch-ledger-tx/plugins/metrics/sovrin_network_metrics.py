@@ -11,7 +11,7 @@ class main(plugin_collection.Plugin):
     def __init__(self, mlog: bool = False, gauth_json: str = None, file_name: str = None, worksheet_name: str = None, batchsize: int = None):
         # metrics_log_info: list = []
         super().__init__()
-        self.index = 1
+        self.index = 1 # Set to -1 to disable plug-in.
         self.name = 'Sovrin Network Metrics'
         self.description = ''
         self.type = ''
@@ -21,7 +21,7 @@ class main(plugin_collection.Plugin):
         self.worksheet_name = worksheet_name
         self.batchsize = batchsize
 
-    def parse_args(self, parser, argv=None, status_only: bool = False):
+    def parse_args(self, parser, argv=None):
         parser.add_argument("--mlog", action="store_true", help="Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name. ex: --mlog --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]")
         parser.add_argument("--json", default=os.environ.get('JSON') , help="Google API Credentials json file name (file must be in root folder). Can be specified using the 'JSON' environment variable.", nargs='*')
         parser.add_argument("--file", default=os.environ.get('FILE') , help="Specify which google sheets file you want to log too. Can be specified using the 'FILE' environment variable.", nargs='*')
