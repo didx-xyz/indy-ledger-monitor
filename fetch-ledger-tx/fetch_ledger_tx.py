@@ -9,6 +9,10 @@ import datetime
 import urllib.request
 import re
 from typing import Tuple
+import time
+
+from asyncio import Event, Task
+from typing import List, NamedTuple
 
 import nacl.signing
 from indy_vdr.bindings import version
@@ -36,11 +40,17 @@ from indy_vdr.pool import Pool, open_pool
 from plugin_collection import PluginCollection
 import time
 
+MAX_PENDING = 25
+MAX_RETRY = 10
+
 verbose = False
 
 def log(*args):
     if verbose:
         print(*args, "\n", file=sys.stderr)
+
+    # logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+    # LOGGER = logging.getLogger(__name__)
 
 class DidKey:
     def __init__(self, seed):
@@ -54,6 +64,9 @@ class DidKey:
         signed = self.sk.sign(req.signature_input)
         req.set_signature(signed.signature)
 
+class GetTxn(NamedTuple):
+    seq_no: int
+    task: Task
 
 def seed_as_bytes(seed):
     if not seed or isinstance(seed, bytes):
@@ -72,12 +85,81 @@ async def get_pool_txns(pool: Pool):
     pool_txns = await pool.get_transactions()
     return pool_txns
 
-async def get_txn(pool: Pool, seq_no: int):
-    req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
-    return await pool.submit_request(req)
+# async def get_txn(pool: Pool, seq_no: int):
+#     req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
+#     return await pool.submit_request(req)
+#
+# async def get_txn_range(pool: Pool, seq_nos):
+#     return [await get_txn(pool, seq_no) for seq_no in seq_nos]
 
-async def get_txn_range(pool: Pool, seq_nos):
-    return [await get_txn(pool, seq_no) for seq_no in seq_nos]
+async def get_txn(pool: Pool, seq_no: int):
+    retries = MAX_RETRY
+    while True:
+        req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
+        try:
+            return await pool.submit_request(req)
+        except Exception:
+            retry = retries > 0
+            LOGGER.exception(
+                f"Error fetching transaction (seqno: {seq_no}, retry: {retry})"
+            )
+            if not retry:
+                raise
+            retries -= 1
+
+async def get_max_seq_no(pool):
+    try:
+        txn = await get_txn(pool, 1)
+        return txn["data"]["ledgerSize"]
+    except Exception as e:
+        raise Exception("Error fetching maximum sequence number") from e
+
+async def get_txn_range(pool: Pool, start_txn: int, end_txn: int = None):
+    if not end_txn:
+        end_txn = await get_max_seq_no(pool)
+
+    loop = asyncio.get_event_loop()
+    seq_no = start_txn
+    requests: List[GetTxn] = []
+    updated = Event()
+
+    def on_update(_task):
+        updated.set()
+
+    while True:
+        updated.clear()
+
+        # check pending requests
+        while requests and requests[0].task.done():
+            task = requests.pop(0).task
+            # may raise an exception if failed after retries
+            yield task.result()
+
+        while len(requests) < MAX_PENDING and (end_txn is None or seq_no < end_txn):
+            task = loop.create_task(get_txn(pool, seq_no))
+            task.add_done_callback(on_update)
+            requests.append(GetTxn(seq_no, task))
+            seq_no += 1
+
+        if not requests:
+            break
+
+        await updated.wait()
+
+async def print_txn_range(transactions_path, start_txn: int, end_txn: int = None):
+    LOGGER.info("Opening pool")
+    pool = await open_pool(transactions_path=transactions_path)
+
+    LOGGER.info("Starting retrieval")
+    start = time.perf_counter()
+    count = 0
+
+    async for result in get_txn_range(pool, start_txn, end_txn):
+        print(json.dumps(result['seqNo']))
+        count += 1
+
+    dur = time.perf_counter() - start
+    LOGGER.info(f"Retrieved {count} transactions in {dur:0.2f}s")
 
 async def get_cred_by_Id(pool: Pool, credId):
     req = build_get_cred_def_request(
@@ -110,7 +192,9 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
         print(json.dumps(maintx_response, indent=2))
     
     if maintxr:
-        maintxr_response = await get_txn_range(pool, list(maintxr))
+        start_txn = maintxr[0]
+        end_txn = maintxr[-1]
+        maintxr_response = await get_txn_range(pool, start_txn, end_txn)
         print(json.dumps(maintxr_response, indent=2))
 
     if credid:

@@ -22,7 +22,45 @@ class Transaction(Interface):
     txn_time = DateTime()
 
     def resolve_txn_type(parent, info):
-        return parent["data"]["txn"]["meta"]
+        # return parent["data"]["txn"]["meta"]
+        txn_type_int = parent["data"]["txn"]["type"]
+
+        if txn_type_int == '1':
+            txn_type = 'NYM'
+        elif txn_type_int == '100':
+            txn_type = 'ATTRIB'
+        elif txn_type_int == '101':
+            txn_type = 'SCHEMA'
+        elif txn_type_int == '102':
+            txn_type = 'CLAIM_DEF'
+        elif txn_type_int == '113':
+            txn_type = 'REVOC_REG_DEF'
+        elif txn_type_int == '114':
+            txn_type = 'REVOC_REG_ENTRY'
+        elif txn_type_int == '200':
+            txn_type = 'SET_CONTEXT'
+        elif txn_type_int == '0':
+            txn_type = 'NODE'
+        elif txn_type_int == '10':
+            txn_type = 'POOL_UPGRADE'
+        elif txn_type_int == '11':
+            txn_type = 'NODE_UPGRADE'
+        elif txn_type_int == '11':
+            txn_type = 'POOL_CONFIG'
+        elif txn_type_int == '12':
+            txn_type = 'AUTH_RULE'
+        elif txn_type_int == '12':
+            txn_type = 'AUTH_RULES'
+        elif txn_type_int == '4':
+            txn_type = 'TXN_AUTHOR_AGREEMENT'
+        elif txn_type_int == '5':
+            txn_type = 'TXN_AUTHOR_AGREEMENT_AML'
+        elif txn_type_int == '20000':
+            txn_type = 'SET_FEES'
+        else:
+            txn_type = 'ERROR'
+
+        return txn_type
 
     @classmethod
     def resolve_type(cls, instance, info):
@@ -35,7 +73,7 @@ class Transaction(Interface):
         elif type == "101":
             return Schema
         elif type == "102":
-            return CredDefTxn
+            return CredDef
         else:
             return BaseTxn
 
