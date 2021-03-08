@@ -2,11 +2,13 @@ from graphene import String, ObjectType, List, Field, Int, ID, Boolean, Interfac
 from tinydb import TinyDB, Query as DbQuery
 from tinydb.storages import JSONStorage
 from tinydb.middlewares import CachingMiddleware
+from tinydb_smartcache import SmartCacheTable
 
 import datetime
 import json
 
-db = TinyDB('../../ledger_data/indy_mainnet_tinydb.json'
+TinyDB.table_class = SmartCacheTable
+db = TinyDB('../ledger_data/indy_mainnet_tinydb.json'
             '', storage=CachingMiddleware(JSONStorage))
 
 
