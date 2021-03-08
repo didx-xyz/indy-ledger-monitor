@@ -192,14 +192,8 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
         print(json.dumps(maintx_response, indent=2))
     
     if maintxr:
-        #maintxr_response = await get_txn_range(pool, list(maintxr))
-        # using list comprehension
-        # to assign variables from list element
-        # start_txn, end_txn = maintxr
-        print(maintxr)
         start_txn = maintxr[0]
-        end_txn = maintxr[1]
-        # [start_txn, end_txn for seq_no in maintxr]
+        end_txn = maintxr[-1]
         maintxr_response = await get_txn_range(pool, start_txn, end_txn)
         print(json.dumps(maintxr_response, indent=2))
 
