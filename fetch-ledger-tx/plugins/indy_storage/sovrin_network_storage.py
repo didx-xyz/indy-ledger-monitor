@@ -29,61 +29,62 @@ class main(plugin_collection.Plugin):
             self.pickledb_store = args.pickledb_store
         else:
             print('Persist ledger transactions to PickleDB.')
-            print('ex: --pickledb_store')
+            print('ex: --pickledb_store True')
             exit()
         
     async def perform_operation(self, result, pool, network_name):
-        if self.pickledb_store:
-            # connect to db
-            db = pickledb_conn()
-
-            dbtiny = tinydb_conn()
-            # fetch ledger size
-            maintx_response = await get_txn(pool, 1)
-            self.ledger_size = maintx_response['data']['ledgerSize']
-            print(self.ledger_size)
-
-            # Check if we have any previous records in DB
-            print(db.getall())
-            pos = len(db.getall()) + 1
-            if pos == self.ledger_size:
-                print('No new transactions')
-                exit()
-            else:
-                while pos <= self.ledger_size:
-                    print('Start dumping from transaction {} to transaction {} of total ledger transactions {}'.format(
-                        int(pos),
-                        int(pos) + 10,
-                        self.ledger_size))
-                    if self.ledger_size - pos <= 10:
-                        maintxr_response = await get_txn_range(pool, list(range(pos, self.ledger_size+1)))
-                    else:
-                        maintxr_response = await get_txn_range(pool, list(range(pos, pos + 10)))
-
-                    for tx in maintxr_response:
-                        if pos == self.ledger_size:
-                            tx_new = self.add_metadata(tx)
-                            print(tx['seqNo'])
-                            print('SeqNo {} is a {}'.format(tx_new['seqNo'],tx_new["data"]["txn"]["meta"]))
-                            db.set(json.dumps(tx_new['seqNo']), json.dumps(tx_new))
-                            dbtiny.insert(tx_new)
-                            print('All records exported - current position {} and total ledger transactions {}'.format(
-                                pos,
-                                self.ledger_size))
-                            exit()
-                        else:
-                            print(tx['seqNo'])
-                            tx_new = self.add_metadata(tx)
-                            print('SeqNo {} is a {}'.format(tx_new['seqNo'],tx_new["data"]["txn"]["meta"]))
-                            db.set(json.dumps(tx_new['seqNo']), json.dumps(tx_new))
-                            dbtiny.insert(tx_new)
-
-                    print('Saving PickleDB Results: {}'.format(db.dump()))
-                    pos = len(db.getall()) + 1
-
-            print(len(db.getall()))
-            # Save DB
-            print('Saving PickleDB Results: {}'.format(db.dump()))
+        pass
+        # if self.pickledb_store:
+        #     # connect to db
+        #     db = pickledb_conn()
+        #
+        #     dbtiny = tinydb_conn()
+        #     # fetch ledger size
+        #     maintx_response = await get_txn(pool, 1)
+        #     self.ledger_size = maintx_response['data']['ledgerSize']
+        #     print(self.ledger_size)
+        #
+        #     # Check if we have any previous records in DB
+        #     print(db.getall())
+        #     pos = len(db.getall()) + 1
+        #     if pos == self.ledger_size:
+        #         print('No new transactions')
+        #         exit()
+        #     else:
+        #         while pos <= self.ledger_size:
+        #             print('Start dumping from transaction {} to transaction {} of total ledger transactions {}'.format(
+        #                 int(pos),
+        #                 int(pos) + 10,
+        #                 self.ledger_size))
+        #             if self.ledger_size - pos <= 10:
+        #                 maintxr_response = await get_txn_range(pool, list(range(pos, self.ledger_size+1)))
+        #             else:
+        #                 maintxr_response = await get_txn_range(pool, list(range(pos, pos + 10)))
+        #
+        #             for tx in maintxr_response:
+        #                 if pos == self.ledger_size:
+        #                     tx_new = self.add_metadata(tx)
+        #                     print(tx['seqNo'])
+        #                     print('SeqNo {} is a {}'.format(tx_new['seqNo'],tx_new["data"]["txn"]["meta"]))
+        #                     db.set(json.dumps(tx_new['seqNo']), json.dumps(tx_new))
+        #                     dbtiny.insert(tx_new)
+        #                     print('All records exported - current position {} and total ledger transactions {}'.format(
+        #                         pos,
+        #                         self.ledger_size))
+        #                     exit()
+        #                 else:
+        #                     print(tx['seqNo'])
+        #                     tx_new = self.add_metadata(tx)
+        #                     print('SeqNo {} is a {}'.format(tx_new['seqNo'],tx_new["data"]["txn"]["meta"]))
+        #                     db.set(json.dumps(tx_new['seqNo']), json.dumps(tx_new))
+        #                     dbtiny.insert(tx_new)
+        #
+        #             print('Saving PickleDB Results: {}'.format(db.dump()))
+        #             pos = len(db.getall()) + 1
+        #
+        #     print(len(db.getall()))
+        #     # Save DB
+        #     print('Saving PickleDB Results: {}'.format(db.dump()))
 
     def add_metadata(self, txn):
         REVOC_REG_ENTRY = 0
