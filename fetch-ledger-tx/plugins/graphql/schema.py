@@ -74,6 +74,7 @@ class Transaction(Interface):
         elif type == "102":
             return CredDefTxn
         else:
+            # TODO need to implement other TX types as it currently returns BaseTxn for Revocation entries etc.
             return BaseTxn
 
     def resolve_endorser(parent, info):
