@@ -194,7 +194,10 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
     if maintxr:
         start_txn = maintxr[0]
         end_txn = maintxr[-1]
-        maintxr_response = await get_txn_range(pool, start_txn, end_txn)
+        print(maintxr)
+        # maintxr_response = await get_txn_range(pool, start_txn, end_txn)
+        maintxr_response = [tx async for tx in get_txn_range(pool, start_txn, end_txn)]
+        print(maintxr)
         print(json.dumps(maintxr_response, indent=2))
 
     if credid:
