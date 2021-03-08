@@ -78,23 +78,25 @@ class Transaction(Interface):
             return BaseTxn
 
     def resolve_endorser(parent, info):
-        print("ENDORSER METADATA", parent["data"]["txn"]["metadata"])
+        # print("ENDORSER METADATA", parent["data"]["txn"]["metadata"])
         if 'endorser' in parent["data"]["txn"]["metadata"]:
             endorser = parent["data"]["txn"]["metadata"]["endorser"]
-            print("Endorser DID", endorser)
+            # print("Endorser DID", endorser)
 
             TXN = DbQuery()
             return db.get((TXN['data']['txn']['data']['dest'] == endorser))
 
         else:
-            print('Not an Endorser')
-            return None
+            TXN = DbQuery()
+            from_did = parent["data"]["txn"]["metadata"]['from']
+            # print(from_did)
+            return db.get((TXN['data']['txn']['data']['dest'] == from_did) & (TXN['data']['txn']['type'] == "1"))
 
     def resolve_author(parent, info):
         if 'from' in parent["data"]["txn"]["metadata"]:
             TXN = DbQuery()
             from_did = parent["data"]["txn"]["metadata"]['from']
-            print(from_did)
+            # print(from_did)
             return db.get((TXN['data']['txn']['data']['dest'] == from_did) & (TXN['data']['txn']['type'] == "1"))
         else:
             return None
@@ -161,7 +163,7 @@ class AttributeConnection(relay.Connection):
 
 class CredDef(ObjectType):
     class Meta:
-        interfaces = (relay.Node, )
+        interfaces = (relay.Node, Transaction)
     id = ID(required=True)
     ## TODO Maybe model the crypto
     # primary = List(String)
@@ -438,7 +440,6 @@ class Query(ObjectType):
 
     def resolve_get_definition(self,info, id):
         ## TODO Extract tx time from metadata
-        print(id)
         TXN = DbQuery()
         result = db.get(TXN["data"]["txnMetadata"]["txnId"] == id)
 
