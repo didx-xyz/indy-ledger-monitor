@@ -146,21 +146,6 @@ async def get_txn_range(pool: Pool, start_txn: int, end_txn: int = None):
 
         await updated.wait()
 
-async def print_txn_range(transactions_path, start_txn: int, end_txn: int = None):
-    LOGGER.info("Opening pool")
-    pool = await open_pool(transactions_path=transactions_path)
-
-    LOGGER.info("Starting retrieval")
-    start = time.perf_counter()
-    count = 0
-
-    async for result in get_txn_range(pool, start_txn, end_txn):
-        print(json.dumps(result['seqNo']))
-        count += 1
-
-    dur = time.perf_counter() - start
-    LOGGER.info(f"Retrieved {count} transactions in {dur:0.2f}s")
-
 async def get_cred_by_Id(pool: Pool, credId):
     req = build_get_cred_def_request(
         None, credId
