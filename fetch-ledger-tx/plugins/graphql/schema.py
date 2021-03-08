@@ -5,7 +5,7 @@ from tinydb.middlewares import CachingMiddleware
 
 import datetime
 import json
-from helpers import create_cred_def_from_data, create_schema_from_data
+from .helpers import create_cred_def_from_data, create_schema_from_data
 
 db = TinyDB('../../ledger_data/indy_tinydb.json'
             '', storage=CachingMiddleware(JSONStorage))
