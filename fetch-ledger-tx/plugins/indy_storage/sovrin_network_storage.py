@@ -3,88 +3,140 @@ import json
 import os
 import datetime
 import time
-from .pickledb_storage import pickledb_conn, find_last
-from .tinydb_storage import tinydb_conn, find_last
-from fetch_ledger_tx import get_txn_range, get_txn
+from fetch_ledger_tx import get_txn_range, get_txn, get_max_seq_no
+from tinydb import TinyDB, Query
 
 class main(plugin_collection.Plugin):
     
-    def __init__(self, pickledb_store: bool = False):
+    def __init__(self, tinydb_store: bool = False, tinydb_store_inc: bool = False, tinydb_path: str = ""):
         super().__init__()
         self.index = 1
         self.name = 'Sovrin Network PickleDB Storage'
         self.description = ''
         self.type = ''
-        self.pickledb_store = pickledb_store
+        self.tinydb_store = tinydb_store
+        self.tinydb_store_inc = tinydb_store_inc
+        self.tinydb_path = tinydb_path
         self.ledger_size = 0
 
     def parse_args(self, parser, argv=None, status_only: bool = False):
-        parser.add_argument("--pickledb_store", help="ex: --pickledb_store True")
+        parser.add_argument("--tinydb_store", help="Persist all ledger transactions to TinyDB. ex: --tinydb_store True")
+        parser.add_argument("--tinydb_store_inc", help="Persist new ledger transactions from last seqNo available in TinyDb. ex: --tinydb_store_inc True")
+        parser.add_argument("--tinydb_path", help="TinyDb file path. ex: --tinydb_path tinydb.json or /home/indy/ledger_data/indy_tinydb.json")
 
     def load_parse_args(self, args):
         global verbose
         verbose = args.verbose
 
-        if args.pickledb_store:
-            self.pickledb_store = args.pickledb_store
+        if args.tinydb_store:
+            self.tinydb_store = args.tinydb_store
+
+        if args.tinydb_store_inc:
+            self.tinydb_store_inc = args.tinydb_store_inc
+
+        if args.tinydb_path:
+            self.tinydb_path = args.tinydb_path
         else:
-            print('Persist ledger transactions to PickleDB.')
-            print('ex: --pickledb_store True')
+            print('Persist ledger transactions to TinyDB.')
+            print('ex: --tinydb_store True')
             exit()
         
     async def perform_operation(self, result, pool, network_name):
-        pass
-        # if self.pickledb_store:
-        #     # connect to db
-        #     db = pickledb_conn()
-        #
-        #     dbtiny = tinydb_conn()
-        #     # fetch ledger size
-        #     maintx_response = await get_txn(pool, 1)
-        #     self.ledger_size = maintx_response['data']['ledgerSize']
-        #     print(self.ledger_size)
-        #
-        #     # Check if we have any previous records in DB
-        #     print(db.getall())
-        #     pos = len(db.getall()) + 1
-        #     if pos == self.ledger_size:
-        #         print('No new transactions')
-        #         exit()
-        #     else:
-        #         while pos <= self.ledger_size:
-        #             print('Start dumping from transaction {} to transaction {} of total ledger transactions {}'.format(
-        #                 int(pos),
-        #                 int(pos) + 10,
-        #                 self.ledger_size))
-        #             if self.ledger_size - pos <= 10:
-        #                 maintxr_response = await get_txn_range(pool, list(range(pos, self.ledger_size+1)))
-        #             else:
-        #                 maintxr_response = await get_txn_range(pool, list(range(pos, pos + 10)))
-        #
-        #             for tx in maintxr_response:
-        #                 if pos == self.ledger_size:
-        #                     tx_new = self.add_metadata(tx)
-        #                     print(tx['seqNo'])
-        #                     print('SeqNo {} is a {}'.format(tx_new['seqNo'],tx_new["data"]["txn"]["meta"]))
-        #                     db.set(json.dumps(tx_new['seqNo']), json.dumps(tx_new))
-        #                     dbtiny.insert(tx_new)
-        #                     print('All records exported - current position {} and total ledger transactions {}'.format(
-        #                         pos,
-        #                         self.ledger_size))
-        #                     exit()
-        #                 else:
-        #                     print(tx['seqNo'])
-        #                     tx_new = self.add_metadata(tx)
-        #                     print('SeqNo {} is a {}'.format(tx_new['seqNo'],tx_new["data"]["txn"]["meta"]))
-        #                     db.set(json.dumps(tx_new['seqNo']), json.dumps(tx_new))
-        #                     dbtiny.insert(tx_new)
-        #
-        #             print('Saving PickleDB Results: {}'.format(db.dump()))
-        #             pos = len(db.getall()) + 1
-        #
-        #     print(len(db.getall()))
-        #     # Save DB
-        #     print('Saving PickleDB Results: {}'.format(db.dump()))
+
+        if self.tinydb_store:
+            pass
+
+        if self.tinydb_store_inc:
+            # connect to db
+
+            # tinydb = TinyDB(self.tinydb_path)
+            db = TinyDB(self.tinydb_path, sort_keys=True)
+            # fetch ledger size
+            maintx_response = await get_max_seq_no(pool)
+            print("response is:",maintx_response)
+            self.ledger_size = maintx_response
+            print(self.ledger_size)
+
+            # Check if we have any previous records in DB
+            print(len(db.all()))
+            pos = len(db.all()) + 1
+            print(pos)
+            if pos == self.ledger_size:
+                print('No new transactions')
+                exit()
+            else:
+                mainstart = time.perf_counter()
+                maincount = 0
+                while pos <= self.ledger_size:
+                    start = time.perf_counter()
+                    count = 0
+                    print('Start dumping from transaction {} to transaction {} of total ledger transactions {}'.format(
+                        int(pos),
+                        int(pos) + 500,
+                        self.ledger_size))
+                    # start_txn = pos
+                    # end_txn = self.ledger_size + 1
+                    # print(start_txn, end_txn)
+                    if self.ledger_size - pos <= 500:
+                        # async for result in get_txn_range(pool, start_txn, end_txn):
+                        #     print(json.dumps(result['seqNo']))
+                        #     db.insert(result)
+                        #     count += 1
+                        maintxr_response = [tx async for tx in get_txn_range(pool, pos, self.ledger_size+1)]
+                        # async for maintxr_response in get_txn_range(pool, list(range(pos, self.ledger_size+1)))
+                    else:
+                        maintxr_response = [tx async for tx in get_txn_range(pool, pos, pos+500)]
+
+                    for tx in maintxr_response:
+                        if pos == self.ledger_size:
+                            # tx_new = self.add_metadata(tx)
+                            print(tx['seqNo'])
+                            print('SeqNo {} is of type {}'.format(tx['seqNo'],tx["data"]["txn"]["type"]))
+                            db.insert(tx)
+                            count += 1
+                            print('All records exported - current position {} and total ledger transactions {}'.format(
+                                pos,
+                                self.ledger_size))
+                            exit()
+                        else:
+                            print(tx['seqNo'])
+                            # tx_new = self.add_metadata(tx)
+                            print('SeqNo {} is of type {}'.format(tx['seqNo'],tx["data"]["txn"]["type"]))
+                            db.insert(tx)
+                            count += 1
+
+                    print('Saving TinyDB Results')
+                    pos = len(db.all()) + 1
+                    print('pos is now', pos)
+                    dur = time.perf_counter() - start
+                    print(f"Retrieved {count} transactions in {dur:0.2f}s")
+                maincount += count
+
+            dur = time.perf_counter() - mainstart
+            print(f"Retrieved {maincount} transactions in {dur:0.2f}s")
+
+            print(len(db.all()))
+            # Save DB
+            print('Saving TinyDB Results')
+
+    async def tindydb_txn_all(transactions_path):
+        LOGGER.info("Opening pool")
+        pool = await open_pool(transactions_path=transactions_path)
+
+        start_txn = 1
+        end_txn = await get_max_seq_no(pool)
+
+        LOGGER.info("Starting retrieval")
+        start = time.perf_counter()
+        count = 0
+
+        async for result in get_txn_range(pool, start_txn, end_txn):
+            print(json.dumps(result['seqNo']))
+            db.insert(result)
+            count += 1
+
+        dur = time.perf_counter() - start
+        LOGGER.info(f"Retrieved {count} transactions in {dur:0.2f}s")
 
     def add_metadata(self, txn):
         REVOC_REG_ENTRY = 0
