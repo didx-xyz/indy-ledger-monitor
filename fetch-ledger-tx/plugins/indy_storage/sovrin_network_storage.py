@@ -53,16 +53,16 @@ class main(plugin_collection.Plugin):
             db = TinyDB(self.tinydb_path, sort_keys=True)
             # fetch ledger size
             maintx_response = await get_max_seq_no(pool)
-            print("response is:",maintx_response)
+            # print("response is:",maintx_response)
             self.ledger_size = maintx_response
-            print(self.ledger_size)
+            # print(self.ledger_size)
 
             # Check if we have any previous records in DB
-            print(len(db.all()))
+            # print(len(db.all()))
             pos = len(db.all()) + 1
-            print(pos)
-            if pos == self.ledger_size:
-                print('No new transactions')
+
+            if len(db.all()) == self.ledger_size:
+                print(f"No new transactions, last DB seqNo {len(db.all())} of last ledger seqNo {self.ledger_size}")
                 exit()
             else:
                 mainstart = time.perf_counter()
@@ -110,6 +110,7 @@ class main(plugin_collection.Plugin):
                     print('pos is now', pos)
                     dur = time.perf_counter() - start
                     print(f"Retrieved {count} transactions in {dur:0.2f}s")
+
                 maincount += count
 
             dur = time.perf_counter() - mainstart
