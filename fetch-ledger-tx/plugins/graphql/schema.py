@@ -7,8 +7,7 @@ import datetime
 import json
 from helpers import create_cred_def_from_data, create_schema_from_data
 
-db = TinyDB('../../ledger_data/indy_tinydb.json', sort_keys=True, storage=CachingMiddleware(JSONStorage))
-
+db = TinyDB('../../ledger_data/indy_mainnet_tinydb.json', sort_keys=True, storage=CachingMiddleware(JSONStorage))
 
 
 class Transaction(Interface):
@@ -22,7 +21,45 @@ class Transaction(Interface):
     txn_time = DateTime()
 
     def resolve_txn_type(parent, info):
-        return parent["data"]["txn"]["meta"]
+        # return parent["data"]["txn"]["meta"]
+        txn_type_int = parent["data"]["txn"]["type"]
+
+        if txn_type_int == '1':
+            txn_type = 'NYM'
+        elif txn_type_int == '100':
+            txn_type = 'ATTRIB'
+        elif txn_type_int == '101':
+            txn_type = 'SCHEMA'
+        elif txn_type_int == '102':
+            txn_type = 'CLAIM_DEF'
+        elif txn_type_int == '113':
+            txn_type = 'REVOC_REG_DEF'
+        elif txn_type_int == '114':
+            txn_type = 'REVOC_REG_ENTRY'
+        elif txn_type_int == '200':
+            txn_type = 'SET_CONTEXT'
+        elif txn_type_int == '0':
+            txn_type = 'NODE'
+        elif txn_type_int == '10':
+            txn_type = 'POOL_UPGRADE'
+        elif txn_type_int == '11':
+            txn_type = 'NODE_UPGRADE'
+        elif txn_type_int == '11':
+            txn_type = 'POOL_CONFIG'
+        elif txn_type_int == '12':
+            txn_type = 'AUTH_RULE'
+        elif txn_type_int == '12':
+            txn_type = 'AUTH_RULES'
+        elif txn_type_int == '4':
+            txn_type = 'TXN_AUTHOR_AGREEMENT'
+        elif txn_type_int == '5':
+            txn_type = 'TXN_AUTHOR_AGREEMENT_AML'
+        elif txn_type_int == '20000':
+            txn_type = 'SET_FEES'
+        else:
+            txn_type = 'ERROR'
+
+        return txn_type
 
     @classmethod
     def resolve_type(cls, instance, info):
@@ -68,6 +105,7 @@ class Transaction(Interface):
         else:
             return None
 
+
 class TransactionConnection(relay.Connection):
     class Meta:
         node = Transaction
@@ -76,21 +114,23 @@ class TransactionConnection(relay.Connection):
     def resolve_count(root, info):
         return len(root.edges)
 
+
 class AttribTxn(ObjectType):
     class Meta:
         interfaces = (Transaction, )
-    attribute = Field(lambda :Attribute)
+    attribute = Field(lambda: Attribute)
 
     def resolve_attribute(parent, info):
-        attrib =  parent["data"]["txn"]["data"]["dest"]
+        attrib = parent["data"]["txn"]["data"]["dest"]
         attrib["seqNo"] = parent["seqNo"]
+
 
 class Attribute(ObjectType):
     class Meta:
         interfaces = (relay.Node, )
     endpoint = String()
     raw = String()
-    did = Field(lambda : DID)
+    did = Field(lambda: DID)
     attrib_txn = Field(lambda: AttribTxn)
 
     def resolve_did(parent, info):
@@ -111,26 +151,20 @@ class AttributeConnection(relay.Connection):
         return len(root.edges)
 
 
-
-
-
-
-
-
 class CredDef(ObjectType):
     class Meta:
         interfaces = (relay.Node, )
     id = ID(required=True)
-    cred_txn = Field(lambda : CredDefTxn)
-    ## TODO Maybe model the crypto
+    cred_txn = Field(lambda: CredDefTxn)
+    # TODO Maybe model the crypto
     # primary = List(String)
     # revocation = List(String)
 
     is_revocable = Boolean()
 
-    creator = Field(lambda : DID)
+    creator = Field(lambda: DID)
 
-    schema = Field(lambda : Schema)
+    schema = Field(lambda: Schema)
 
     def resolve_cred_txn(parent, info):
         TXN = DbQuery()
@@ -155,15 +189,15 @@ class CredDef(ObjectType):
         return create_schema_from_data(schema_txn)
 
 
-
-
 class CredDefConnection(relay.Connection):
     class Meta:
         node = CredDef
 
     count = Int()
+
     def resolve_count(root, info):
         return len(root.edges)
+
 
 class CredDefTxn(ObjectType):
     class Meta:
@@ -174,16 +208,17 @@ class CredDefTxn(ObjectType):
         def resolve_cred(parent, info):
             return create_cred_def_from_data(parent)
 
+
 class Schema(ObjectType):
     class Meta:
         interfaces = (relay.Node, )
     id = ID(required=True)
-    schema_txn = Field(lambda : SchemaTxn)
+    schema_txn = Field(lambda: SchemaTxn)
     attr_names = List(String)
     name = String(required=True)
     version = String(required=True)
 
-    creator = Field(lambda : DID)
+    creator = Field(lambda: DID)
 
     definitions = relay.ConnectionField(CredDefConnection)
 
@@ -208,7 +243,7 @@ class Schema(ObjectType):
         schema_txn = db.get(TXN["data"]["txnMetadata"]["txnId"] == parent["id"])
 
         cred_def_txns = db.search(TXN["data"]["txn"]["data"]["ref"] == schema_txn["seqNo"])
-        cred_defs =[]
+        cred_defs = []
         for txn in cred_def_txns:
             cred_def = create_cred_def_from_data(txn)
             cred_defs.append(cred_def)
@@ -221,6 +256,7 @@ class Schema(ObjectType):
         schema_txn = db.get(TXN["data"]["txnMetadata"]["txnId"] == parent["id"])
 
         return db.count(TXN["data"]["txn"]["data"]["ref"] == schema_txn["seqNo"])
+
 
 class SchemaConnection(relay.Connection):
     class Meta:
@@ -235,7 +271,7 @@ class SchemaTxn(ObjectType):
     class Meta:
         interfaces = (Transaction, )
 
-    schema = Field(lambda : Schema)
+    schema = Field(lambda: Schema)
 
     def resolve_schema(parent, info):
 
@@ -260,6 +296,7 @@ class BaseTxn(ObjectType):
     def resolve_data(parent, info):
         return parent['data']
 
+
 class DID(ObjectType):
     class Meta:
         interfaces = (relay.Node, )
@@ -276,7 +313,7 @@ class DID(ObjectType):
 
     created_schema = relay.ConnectionField(SchemaConnection)
 
-    created_dids = List(lambda : DID)
+    created_dids = List(lambda: DID)
     created_dids_count = Int()
 
     created_definitions = relay.ConnectionField(CredDefConnection)
@@ -286,7 +323,6 @@ class DID(ObjectType):
     created_schema_count = Int()
 
     nym_txn = Field(lambda: NymTxn)
-
 
     def resolve_did(parent, info):
         print("ID", parent)
@@ -311,7 +347,7 @@ class DID(ObjectType):
         TXN = DbQuery()
         schema_txns = db.search((TXN["data"]["txn"]["metadata"]['from'] == parent["dest"]) & (TXN["data"]["txn"]["type"] == "101"))
         schemas = []
-        ## TODO create common schema parsing
+        # TODO create common schema parsing
         for txn in schema_txns:
             schema = create_schema_from_data(txn)
             schemas.append(schema)
@@ -359,6 +395,7 @@ class DID(ObjectType):
 
         return attrs
 
+
 class DIDConnection(relay.Connection):
     class Meta:
         node = DID
@@ -366,6 +403,7 @@ class DIDConnection(relay.Connection):
 
     def resolve_count(root, info):
         return len(root.edges)
+
 
 class Query(ObjectType):
     get_txns = relay.ConnectionField(TransactionConnection, author=String())
@@ -405,7 +443,7 @@ class Query(ObjectType):
     def resolve_schemas(self, info, **kwargs):
         TXN = DbQuery()
         schema_txns = None
-        ## TODO need a better way to handle multiple args into a single query
+        # TODO need a better way to handle multiple args into a single query
         # I dont like this approach
         if "endorser" in kwargs and "author" in kwargs:
             schema_txns= db.search((TXN['data']['txn']['type'] == "101") & (TXN["data"]["txn"]["metadata"]["endorser"] == kwargs["endorser"]) & (TXN["data"]["txn"]["metadata"]["from"] == kwargs["author"]))
@@ -440,32 +478,31 @@ class Query(ObjectType):
         else:
             return db.all()
 
-    def resolve_get_txn_by_id(self,info, seqNo):
+    def resolve_get_txn_by_id(self, info, seqNo):
         TXN = DbQuery()
         return db.get(TXN['seqNo'] == seqNo)
 
-    def resolve_get_did(self,info, did):
+    def resolve_get_did(self, info, did):
         TXN = DbQuery()
         result = db.get((TXN['data']['txn']['data']['dest'] == did) & (TXN['data']['txn']['type'] == "1"))
         return result['data']['txn']['data']
 
-    def resolve_get_schema(self,info, id):
-        ## TODO Extract tx time from metadata
+    def resolve_get_schema(self, info, id):
+        # TODO Extract tx time from metadata
         print(id)
         TXN = DbQuery()
         result = db.get(TXN["data"]["txnMetadata"]["txnId"] == id)
         print(result)
 
-
         return create_schema_from_data(result)
 
-    def resolve_get_definition(self,info, id):
-        ## TODO Extract tx time from metadata
+    def resolve_get_definition(self, info, id):
+        # TODO Extract tx time from metadata
         print(id)
         TXN = DbQuery()
         result = db.get(TXN["data"]["txnMetadata"]["txnId"] == id)
 
         return create_cred_def_from_data(result)
 
-schema = GqSchema(query=Query, types=[BaseTxn, NymTxn, DID, Schema, SchemaTxn, CredDef, CredDefTxn, DIDConnection])
 
+schema = GqSchema(query=Query, types=[BaseTxn, NymTxn, DID, Schema, SchemaTxn, CredDef, CredDefTxn, DIDConnection])
