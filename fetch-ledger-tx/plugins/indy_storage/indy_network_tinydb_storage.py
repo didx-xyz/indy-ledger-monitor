@@ -63,7 +63,7 @@ class main(plugin_collection.Plugin):
                 if count % 100 == 0 and count != 0:
                     # print(json.dumps(result['seqNo']))
                     inter_dur = time.perf_counter() - start
-                    self.LOGGER.info(f"Currently at {count} transaction and retrieved last 100 of {end_txn} transactions in {inter_dur:0.2f}s")
+                    self.LOGGER.info(f"Currently at transaction {count}. Retrieved last 100 transactions of {end_txn} in {inter_dur:0.2f}s")
                 tinydb.insert(result)
                 count += 1
 
