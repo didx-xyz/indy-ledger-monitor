@@ -3,8 +3,11 @@ import json
 import os
 import datetime
 import time
+import logging
+import sys
 from fetch_ledger_tx import get_txn_range, get_txn, get_max_seq_no
 from tinydb import TinyDB, Query
+
 
 class main(plugin_collection.Plugin):
     
@@ -18,6 +21,9 @@ class main(plugin_collection.Plugin):
         self.tinydb_store_inc = tinydb_store_inc
         self.tinydb_path = tinydb_path
         self.ledger_size = 0
+
+        logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+        self.LOGGER = logging.getLogger(__name__)
 
     def parse_args(self, parser, argv=None, status_only: bool = False):
         parser.add_argument("--tinydb_store", help="Persist all ledger transactions to TinyDB. ex: --tinydb_store True")
@@ -44,13 +50,30 @@ class main(plugin_collection.Plugin):
     async def perform_operation(self, result, pool, network_name):
 
         if self.tinydb_store:
-            pass
+            tinydb = TinyDB(self.tinydb_path, sort_keys=True)
+
+            start_txn = 1
+            end_txn = await get_max_seq_no(pool)
+
+            self.LOGGER.info(f"Starting retrieval at transaction {start_txn} of {end_txn} transactions")
+            start = time.perf_counter()
+            count = 0
+
+            async for result in get_txn_range(pool, start_txn, end_txn):
+                if count % 100 == 0 & count != 0:
+                    # print(json.dumps(result['seqNo']))
+                    self.LOGGER.info(f"Currently at transaction {count} of {end_txn} transactions")
+                tinydb.insert(result)
+                count += 1
+
+            dur = time.perf_counter() - start
+            self.LOGGER.info(f"Retrieved {count} transactions in {dur:0.2f}s")
 
         if self.tinydb_store_inc:
             # connect to db
 
             # tinydb = TinyDB(self.tinydb_path)
-            db = TinyDB(self.tinydb_path, sort_keys=True)
+            tinydb = TinyDB(self.tinydb_path, sort_keys=True)
             # fetch ledger size
             maintx_response = await get_max_seq_no(pool)
             # print("response is:",maintx_response)
@@ -59,10 +82,10 @@ class main(plugin_collection.Plugin):
 
             # Check if we have any previous records in DB
             # print(len(db.all()))
-            pos = len(db.all()) + 1
+            pos = len(tinydb.all()) + 1
 
-            if len(db.all()) == self.ledger_size:
-                print(f"No new transactions, last DB seqNo {len(db.all())} of last ledger seqNo {self.ledger_size}")
+            if len(tinydb.all()) == self.ledger_size:
+                print(f"No new transactions, last DB seqNo {len(tinydb.all())} of last ledger seqNo {self.ledger_size}")
                 exit()
             else:
                 mainstart = time.perf_counter()
@@ -92,7 +115,7 @@ class main(plugin_collection.Plugin):
                             # tx_new = self.add_metadata(tx)
                             print(tx['seqNo'])
                             print('SeqNo {} is of type {}'.format(tx['seqNo'],tx["data"]["txn"]["type"]))
-                            db.insert(tx)
+                            tinydb.insert(tx)
                             count += 1
                             print('All records exported - current position {} and total ledger transactions {}'.format(
                                 pos,
@@ -102,11 +125,11 @@ class main(plugin_collection.Plugin):
                             print(tx['seqNo'])
                             # tx_new = self.add_metadata(tx)
                             print('SeqNo {} is of type {}'.format(tx['seqNo'],tx["data"]["txn"]["type"]))
-                            db.insert(tx)
+                            tinydb.insert(tx)
                             count += 1
 
                     print('Saving TinyDB Results')
-                    pos = len(db.all()) + 1
+                    pos = len(tinydb.all()) + 1
                     print('pos is now', pos)
                     dur = time.perf_counter() - start
                     print(f"Retrieved {count} transactions in {dur:0.2f}s")
@@ -116,28 +139,10 @@ class main(plugin_collection.Plugin):
             dur = time.perf_counter() - mainstart
             print(f"Retrieved {maincount} transactions in {dur:0.2f}s")
 
-            print(len(db.all()))
+            print(len(tinydb.all()))
             # Save DB
             print('Saving TinyDB Results')
 
-    async def tindydb_txn_all(transactions_path):
-        LOGGER.info("Opening pool")
-        pool = await open_pool(transactions_path=transactions_path)
-
-        start_txn = 1
-        end_txn = await get_max_seq_no(pool)
-
-        LOGGER.info("Starting retrieval")
-        start = time.perf_counter()
-        count = 0
-
-        async for result in get_txn_range(pool, start_txn, end_txn):
-            print(json.dumps(result['seqNo']))
-            db.insert(result)
-            count += 1
-
-        dur = time.perf_counter() - start
-        LOGGER.info(f"Retrieved {count} transactions in {dur:0.2f}s")
 
     def add_metadata(self, txn):
         REVOC_REG_ENTRY = 0
