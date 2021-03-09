@@ -69,6 +69,7 @@ class main(plugin_collection.Plugin):
 
             dur = time.perf_counter() - start
             self.LOGGER.info(f"Retrieved {count} transactions in {dur:0.2f}s")
+            tinydb.close()
 
         if self.tinydb_store_inc:
             # connect to db
@@ -87,6 +88,7 @@ class main(plugin_collection.Plugin):
 
             if len(tinydb.all()) == self.ledger_size:
                 print(f"No new transactions, last DB seqNo {len(tinydb.all())} of last ledger seqNo {self.ledger_size}")
+                tinydb.close()
                 exit()
             else:
                 mainstart = time.perf_counter()
@@ -129,9 +131,7 @@ class main(plugin_collection.Plugin):
                             tinydb.insert(tx)
                             count += 1
 
-                    print('Saving TinyDB Results')
                     pos = len(tinydb.all()) + 1
-                    print('pos is now', pos)
                     dur = time.perf_counter() - start
                     print(f"Retrieved {count} transactions in {dur:0.2f}s")
 
@@ -141,8 +141,7 @@ class main(plugin_collection.Plugin):
             print(f"Retrieved {maincount} transactions in {dur:0.2f}s")
 
             print(len(tinydb.all()))
-            # Save DB
-            print('Saving TinyDB Results')
+            tinydb.close()
 
 
     def add_metadata(self, txn):
