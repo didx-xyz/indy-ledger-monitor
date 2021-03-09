@@ -31,6 +31,7 @@ class main(plugin_collection.Plugin):
         parser.add_argument("--tinydb_path", help="TinyDb file path. ex: --tinydb_path tinydb.json or /home/indy/ledger_data/indy_tinydb.json")
 
     def load_parse_args(self, args):
+        # TODO add checks for required parameters such as tinydb_path
         global verbose
         verbose = args.verbose
 
@@ -42,10 +43,10 @@ class main(plugin_collection.Plugin):
 
         if args.tinydb_path:
             self.tinydb_path = args.tinydb_path
-        else:
-            print('Persist ledger transactions to TinyDB.')
-            print('ex: --tinydb_store True')
-            exit()
+        # else:
+        #     print('Persist ledger transactions to TinyDB.')
+        #     print('ex: --tinydb_store True')
+        #     exit()
         
     async def perform_operation(self, result, pool, network_name):
 
