@@ -1,7 +1,0 @@
-graphene
-fastapi
-starlette
-uvicorn
-tinydb
-pickledb
-tinydb_smartcache
