@@ -91,7 +91,8 @@ async def get_cred_by_Id(pool: Pool, credId):
     return await pool.submit_request(req)
 
 async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, network_name: str = None):
-    while True:
+    attempt = 3
+    while attempt:
         try:
 #TODO Add submitted_did as parameter
 async def getNYM(pool: Pool, nym):
@@ -104,6 +105,10 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
             pool = await open_pool(transactions_path=genesis_path)
         except:
             log("Pool Timed Out! Trying again...")
+            if not attempt:
+                print("Unable to get pool Response! 3 attempts where made. Exiting...")
+                exit()
+            attempt -= 1
             continue
         break
     
@@ -183,7 +188,8 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
     # req = build_get_schema_object_by_metadata_request(None, "sch", "test", "1.0.0")
     # log("Get rich schema GET request by Metadata:", req.body)
 
-    await monitor_plugins.apply_all_plugins_on_value(result, pool, network_name)
+    result = await monitor_plugins.apply_all_plugins_on_value(result, pool, network_name)
+    print(json.dumps(result, indent=2))
 
 def get_script_dir():
     return os.path.dirname(os.path.realpath(__file__))

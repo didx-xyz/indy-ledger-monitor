@@ -42,6 +42,7 @@ class Plugin(object):
         self.name = 'UNKNOWN'
         self.description = 'UNKNOWN'
         self.type = 'UNKNOWN'
+        self.enabled = False
 
     def parse_args(self, argument):
         raise NotImplementedError
@@ -55,7 +56,6 @@ class Plugin(object):
         """
         raise NotImplementedError
 
-
 class PluginCollection(object):
     """Upon creation, this class will read the plugins package for modules
     that contain a class definition that is inheriting from the Plugin class
@@ -67,26 +67,29 @@ class PluginCollection(object):
         """
         self.plugin_package = plugin_package
         self.reload_plugins()
-        self.sort()
 
     def reload_plugins(self):
         """Reset the list of all plugins and initiate the walk over the main
         provided plugin package to load all available plugins
         """
         self.plugins = []
-        self.disabled_plugins = []
         self.seen_paths = []
         # print(f'\nLooking for plugins under package {self.plugin_package}')
         self.walk_package(self.plugin_package)
+        self.sort()
 
     async def apply_all_plugins_on_value(self, result, pool, network_name):
         """Apply all of the plugins with the argument supplied to this function
         """
         self.log(f'\033[38;5;37mRunning plugins...\033[0m\n')
         for plugin in self.plugins:
-            self.log(f'\033[38;5;37mRunning {plugin.name}...\033[0m')
-            value = await plugin.perform_operation(result, pool, network_name)
-            self.log((f'\033[38;5;37m{plugin.name} yields value {value}\033[0m\n'))
+            if plugin.enabled:
+                self.log(f'\033[38;5;37mRunning {plugin.name}...\033[0m')
+                result = await plugin.perform_operation(result, pool, network_name)
+                self.log((f'\033[38;5;37m{plugin.name} yields value\033[0m\n')) #{result}
+            else:
+                self.log(f"\033[38;5;3m{plugin.name} disabled.\033[0m\n")
+        return result
 
     def walk_package(self, package):
         """Recursively walk the supplied package to retrieve all plugins
@@ -101,10 +104,7 @@ class PluginCollection(object):
                     # Only add classes that are a sub class of Plugin, but NOT Plugin itself
                     if issubclass(c, Plugin) & (c is not Plugin):
                         # print(f'    Found plugin class: {c.__module__}.{c.__name__}')
-                        if c().index == -1:
-                            self.disabled_plugins.append(c())
-                        else:
-                            self.plugins.append(c())
+                        self.plugins.append(c())
 
 
         # Now that we have looked at all the modules in the current package, start looking
@@ -147,6 +147,4 @@ class PluginCollection(object):
     def plugin_list(self):
         self.log("\033[38;5;37m--- Plug-ins ---\033[0m")
         for plugin in self.plugins:
-            self.log(f"\033[92mENABLED: {plugin.name}: {plugin.__class__.__module__}.{plugin.__class__.__name__}\033[0m")
-        for disabled_plugin in self.disabled_plugins:
-            self.log(f"\033[91mDISABLED: {disabled_plugin.name}: {disabled_plugin.__class__.__module__}.{disabled_plugin.__class__.__name__}\033[0m")
+            self.log(f"\033[38;5;37m{plugin.name}: {plugin.__class__.__module__}.{plugin.__class__.__name__}\033[0m")
