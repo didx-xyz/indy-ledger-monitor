@@ -15,7 +15,7 @@ def gspread_authZ(gauth_json):
     scope = ["https://spreadsheets.google.com/feeds",'https://www.googleapis.com/auth/spreadsheets',"https://www.googleapis.com/auth/drive.file","https://www.googleapis.com/auth/drive"]
     auth_file = find_file(gauth_json)
     if not auth_file:
-        print("\033[1;31;40mUnable to find the Google API Credentials json file! Make sure the file is in the './config' folder and name you specified is correct.")
+        print("\033[1;31;40mUnable to find the Google API Credentials json file! Make sure the file is in the './conf' folder and name you specified is correct.")
         print(f"Json name entered: {gauth_json}.\033[m")
         exit()
 

@@ -1,14 +1,14 @@
 import argparse
 import asyncio
-import base58
-import base64
+# import base58
+# import base64
 import json
 import os
 import sys
-import datetime
+# import datetime
 import urllib.request
 import re
-from typing import Tuple
+# from typing import Tuple
 import pickledb
 
 import nacl.signing
@@ -31,11 +31,12 @@ from indy_vdr.ledger import (
     prepare_txn_author_agreement_acceptance,
     build_get_nym_request,
     LedgerType,
-    Request,
+    # Request,
 )
 from indy_vdr.pool import Pool, open_pool
 from plugin_collection import PluginCollection
-import time
+# import time
+from DidKey import DidKey
 
 verbose = False
 
@@ -47,25 +48,6 @@ def log(*args):
     if verbose:
         print(*args, "\n", file=sys.stderr)
 
-class DidKey:
-    def __init__(self, seed):
-        seed = seed_as_bytes(seed)
-        self.sk = nacl.signing.SigningKey(seed)
-        self.vk = bytes(self.sk.verify_key)
-        self.did = base58.b58encode(self.vk[:16]).decode("ascii")
-        self.verkey = base58.b58encode(self.vk).decode("ascii")
-
-    def sign_request(self, req: Request):
-        signed = self.sk.sign(req.signature_input)
-        req.set_signature(signed.signature)
-
-
-def seed_as_bytes(seed):
-    if not seed or isinstance(seed, bytes):
-        return seed
-    if len(seed) != 32:
-        return base64.b64decode(seed)
-    return seed.encode("ascii")
 
 async def get_schema_by_Id(pool: Pool, schemaId):
     req = build_get_schema_request(
