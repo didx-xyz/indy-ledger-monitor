@@ -62,7 +62,8 @@ class main(plugin_collection.Plugin):
             async for result in get_txn_range(pool, start_txn, end_txn):
                 if count % 100 == 0 and count != 0:
                     # print(json.dumps(result['seqNo']))
-                    self.LOGGER.info(f"Currently at transaction {count} of {end_txn} transactions")
+                    inter_dur = time.perf_counter() - start
+                    self.LOGGER.info(f"Retrieved {count} of {end_txn} transactions in {inter_dur:0.2f}s")
                 tinydb.insert(result)
                 count += 1
 
