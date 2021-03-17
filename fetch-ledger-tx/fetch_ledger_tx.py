@@ -48,10 +48,6 @@ def log(*args):
     if verbose:
         print(*args, "\n", file=sys.stderr)
 
-async def get_pool_txns(pool: Pool):
-    pool_txns = await pool.get_transactions()
-    return pool_txns
-
 async def get_txn(pool: Pool, seq_no: int):
     req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
     return await pool.submit_request(req)
@@ -65,7 +61,7 @@ async def get_cred_by_Id(pool: Pool, credId):
     )
     return await pool.submit_request(req)
 
-async def fetch_ledger_tx(genesis_path: str, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, network_name: str = None):
+async def fetch_ledger_tx(genesis_path: str, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, network_name: str = None):
     attempt = 3
     while attempt:
         try:
@@ -110,10 +106,6 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
         print(db.getall())
         # Save DB
         print('Saving PickleDB Results: {}'.format(db.dump()))
-
-    if pooltx:
-        pooltx_response = await get_pool_txns(pool)
-        print(pooltx_response)
 
     if maintx:
         maintx_response = await get_txn(pool, int(maintx))
@@ -196,7 +188,6 @@ if __name__ == "__main__":
     parser.add_argument("--genesis-url", default=os.environ.get('GENESIS_URL') , help="The url to the genesis file describing the ledger pool.  Can be specified using the 'GENESIS_URL' environment variable.")
     parser.add_argument("--genesis-path", default=os.getenv("GENESIS_PATH") or f"{get_script_dir()}/genesis.txn" , help="The path to the genesis file describing the ledger pool.  Can be specified using the 'GENESIS_PATH' environment variable.")
     parser.add_argument("-s", "--seed", default=os.environ.get('SEED') , help="The privileged DID seed to use for the ledger requests.  Can be specified using the 'SEED' environment variable. If DID seed is not given the request will run anonymously.")
-    parser.add_argument("-pooltx", "--pooltx", help="Get pool ledger transactions.")
     parser.add_argument("-maintx", "--maintx", help="Get a specific transaction number from main ledger.")
     parser.add_argument("-maintxr", "--maintxrange", type=parseNumList, help="Get a range of transactions from main ledger.")
     parser.add_argument("--mlog", action="store_true", help="Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name. ex: --mlog --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]")
@@ -245,4 +236,5 @@ if __name__ == "__main__":
         ident = None
 
     # asyncio.get_event_loop().run_until_complete(fetch_status(args.genesis_path, args.nodes, ident, args.status, args.alerts))
-    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid, network_name))    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.pooltx, ident, args.maintxrange, args.maintx, args.credid, network_name, args.nym, args.db))
+
+	asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, ident, args.maintxrange, args.maintx, args.credid, network_name, args.nym, args.db))

@@ -22,10 +22,8 @@ class main(plugin_collection.Plugin):
         self.schemaid = args.schemaid
 
     async def perform_operation(self, result, pool, network_name):
-
         # "QXdMLmAKZmQBhnvXHxKn78:2:SURFNetSchema:1.0"
         response = await self.get_schema_by_Id(pool, self.schemaid)
-
         return response
 
     async def get_schema_by_Id(self, pool: Pool, schemaid):
