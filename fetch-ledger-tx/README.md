@@ -48,7 +48,6 @@ When you are finished your running the validator tool (covered in the steps belo
 ./manage down
 
 ```
-
 We'll remind you of that later in these instructions.
 
 ### Clone the indy-ledger-monitor repo
@@ -148,7 +147,7 @@ Did I mention: **DO NOT SHARE DID SEEDS**?
 
 The following is an example of the data for a single ledger transaction from Sovrin Mainnet:
 
-` ./run.sh -a --net=smn --maintx 1`
+` ./run.sh --net=smn --maintx 1`
 
 ```JSONC
 {

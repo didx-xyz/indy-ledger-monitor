@@ -24,7 +24,7 @@ from indy_vdr.ledger import (
     build_get_revoc_reg_def_request,
     build_get_revoc_reg_request,
     build_get_revoc_reg_delta_request,
-    build_get_schema_request,
+    # build_get_schema_request,
     # build_rich_schema_request,
     # build_get_schema_object_by_id_request,
     # build_get_schema_object_by_metadata_request,
@@ -48,13 +48,6 @@ def log(*args):
     if verbose:
         print(*args, "\n", file=sys.stderr)
 
-
-async def get_schema_by_Id(pool: Pool, schemaId):
-    req = build_get_schema_request(
-        None, schemaId
-    )
-    return await pool.submit_request(req)
-
 async def get_pool_txns(pool: Pool):
     pool_txns = await pool.get_transactions()
     return pool_txns
@@ -72,7 +65,7 @@ async def get_cred_by_Id(pool: Pool, credId):
     )
     return await pool.submit_request(req)
 
-async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, network_name: str = None):
+async def fetch_ledger_tx(genesis_path: str, pooltx: bool = False, ident: DidKey = None, maintxr: range = None, maintx: str = None, credid: str = None, network_name: str = None):
     attempt = 3
     while attempt:
         try:
@@ -117,11 +110,6 @@ async def fetch_ledger_tx(genesis_path: str, schemaid: str = None, pooltx: bool 
         print(db.getall())
         # Save DB
         print('Saving PickleDB Results: {}'.format(db.dump()))
-
-    if schemaid:
-        # "QXdMLmAKZmQBhnvXHxKn78:2:SURFNetSchema:1.0"
-        response = await get_schema_by_Id(pool, schemaid)
-        print(json.dumps(response, indent=2))
 
     if pooltx:
         pooltx_response = await get_pool_txns(pool)
@@ -209,7 +197,6 @@ if __name__ == "__main__":
     parser.add_argument("--genesis-path", default=os.getenv("GENESIS_PATH") or f"{get_script_dir()}/genesis.txn" , help="The path to the genesis file describing the ledger pool.  Can be specified using the 'GENESIS_PATH' environment variable.")
     parser.add_argument("-s", "--seed", default=os.environ.get('SEED') , help="The privileged DID seed to use for the ledger requests.  Can be specified using the 'SEED' environment variable. If DID seed is not given the request will run anonymously.")
     parser.add_argument("-pooltx", "--pooltx", help="Get pool ledger transactions.")
-    parser.add_argument("-schemaid", "--schemaid", help="Get a specific schema from ledger.")
     parser.add_argument("-maintx", "--maintx", help="Get a specific transaction number from main ledger.")
     parser.add_argument("-maintxr", "--maintxrange", type=parseNumList, help="Get a range of transactions from main ledger.")
     parser.add_argument("--mlog", action="store_true", help="Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name. ex: --mlog --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]")
@@ -220,7 +207,6 @@ if __name__ == "__main__":
     parser.add_argument("-credid", "--credid", help="Get a specific credential definition from ledger.")
     parser.add_argument("-nym", "--nym", help="Get a specific NYM from ledger.")
     parser.add_argument("-db", "--db", help="Dump main ledger transactions to DB")
-    # parser.add_argument("-a", "--anonymous", action="store_true", help="Perform requests anonymously, without requiring privileged DID seed.")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging.")
 
     monitor_plugins.get_parse_args(parser)
@@ -249,12 +235,6 @@ if __name__ == "__main__":
         parser.print_help()
         exit()
 
-    # did_seed = None if args.anonymous else args.seed
-    # if not did_seed and not args.anonymous:
-    #     print("Set the SEED environment variable or argument, or specify the anonymous flag.\n", file=sys.stderr)
-    #     parser.print_help()
-    #     exit()
-
     did_seed = None if not args.seed else args.seed
 
     log("indy-vdr version:", indy_vdr.version())
@@ -265,4 +245,4 @@ if __name__ == "__main__":
         ident = None
 
     # asyncio.get_event_loop().run_until_complete(fetch_status(args.genesis_path, args.nodes, ident, args.status, args.alerts))
-    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid, network_name, args.mlog, int(args.batchsize), metrics_log_info, args.nym, args.db))
+    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.schemaid, args.pooltx, ident, args.maintxrange, args.maintx, args.credid, network_name))    asyncio.get_event_loop().run_until_complete(fetch_ledger_tx(args.genesis_path, args.pooltx, ident, args.maintxrange, args.maintx, args.credid, network_name, args.nym, args.db))
