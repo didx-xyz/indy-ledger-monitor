@@ -1,10 +1,13 @@
 import plugin_collection
-import json
+
+from indy_vdr.ledger import (
+    build_get_txn_request,
+    LedgerType,
+)
 import os
 import datetime
 import time
 from .google_sheets import gspread_authZ
-from fetch_ledger_tx import get_txn_range
 
 class main(plugin_collection.Plugin):
     
@@ -50,65 +53,82 @@ class main(plugin_collection.Plugin):
                 print('ex: --mlog  --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]')
                 exit()
         
-    async def perform_operation(self, result, pool, network_name):
+    async def perform_operation(self, pool, result, network_name):
         txn_range = [None] * 2
         logging_range = [None] * 2 
         int_batchsize = int(self.batchsize)
         MAX_BATCH_SIZE = 100
         BATCHSIZE = 10 # Default amount of txn to fetch from pool
 
-        last_logged_txn = [self.find_last()]                                # Get last txn that was logged
-        txn_range[0] = last_logged_txn[0] + 1                               # Get the next txn: txn_range[*next_txn, ledger_size]
-        maintxr_response = await get_txn_range(pool, list(last_logged_txn)) # Run the last logged txn to get ledger size
-        txn_range[1] = maintxr_response[0]["data"]["ledgerSize"]            # Get ledger size: txn_range[next_txn, *ledger_size]
-        num_of_new_txn = txn_range[1] - txn_range[0] + 1                    # Find how many new txn there are.
+        last_logged_txn = [self.find_last()]                                     # Get last txn that was logged
+        txn_range[0] = last_logged_txn[0] + 1                                    # Get the next txn: txn_range[*next_txn, ledger_size]
+        maintxr_response = await self.get_txn_range(pool, list(last_logged_txn)) # Run the last logged txn to get ledger size
+        txn_range[1] = maintxr_response[0]["data"]["ledgerSize"]                 # Get ledger size: txn_range[next_txn, *ledger_size]
+        num_of_new_txn = txn_range[1] - txn_range[0] + 1                         # Find how many new txn there are.
 
-        if num_of_new_txn == 0:                                             # If no new txn exit()
-            print("No New Transactions. Exiting...") 
+        if num_of_new_txn == 0:                                                  # If no new txn exit()
+            print("\033[1;92;40mNo New Transactions. Exiting...\033[m") 
             exit()
         
         if int_batchsize == 0:
-            print(f'Number of stored logs not specifed. Storing {BATCHSIZE} logs if avalible.')
+            print(f'\033[1;33mNumber of stored logs not specifed. Storing {BATCHSIZE} logs if avalible.\033[m')
         elif int_batchsize > MAX_BATCH_SIZE:
             BATCHSIZE = MAX_BATCH_SIZE
-            print(f'The reqested batch size ({int_batchsize}) is to large. Setting to {BATCHSIZE}.')
+            print(f'\033[1;33mThe reqested batch size ({int_batchsize}) is to large. Setting to {BATCHSIZE}.\033[m')
         else:
             BATCHSIZE = int_batchsize
-            print(f'Storing {BATCHSIZE} logs if avalible.')
+            print(f'\033[1;92;40mStoring {BATCHSIZE} logs if avalible ...\033[m')
 
-        if num_of_new_txn < BATCHSIZE:                                     # Run to the end of the new txn if its less then the log interval
+        if num_of_new_txn < BATCHSIZE:                                           # Run to the end of the new txn if its less then the log interval
             logging_range[0] = txn_range[0]
             logging_range[1] = txn_range[1] + 1
-        else:                                                               # Set log interval to only grab a few txn's at a time if there are more txn then batchsize
+        else:                                                                    # Set log interval to only grab a few txn's at a time if there are more txn then batchsize
             logging_range[0] = txn_range[0]
             logging_range[1] = txn_range[0] + BATCHSIZE
 
         #------------------- Below won't run unless there are new txns ----------------------------------
 
-        print(f'{num_of_new_txn} new transactions. Last transaction logged: {last_logged_txn[0]} Transaction Range: {txn_range[0]}-{txn_range[1]}')
+        print(f'\033[1;92;40mLast transaction logged: {last_logged_txn[0]}\nTransaction Range: {txn_range[0]}-{txn_range[1]}\n{num_of_new_txn} new transactions.\033[m')
         while True:
-            print(f'Logging transactions {logging_range[0]}-{logging_range[1]-1}')
-            maintxr_response = await get_txn_range(pool, list(range(logging_range[0],logging_range[1])))
+            print(f'\033[1;92;40mLogging transactions {logging_range[0]}-{logging_range[1]-1}\033[m')
+            maintxr_response = await self.get_txn_range(pool, list(range(logging_range[0],logging_range[1])))
             txn_seqNo = self.metrics(maintxr_response, network_name, txn_range)
             if txn_seqNo == txn_range[1]:
                 break
+            remaining_txns = int(txn_range[1]) - int(logging_range[1]-1)
+            print(f'\033[1;92;40mTransactions {last_logged_txn[0]+1}-{logging_range[1]-1} added.\n{remaining_txns} transactions remaining.\033[m')
+
             logging_range[0] = txn_seqNo + 1
-            logging_range[1] = txn_seqNo + BATCHSIZE + 1 # put if here to have end of txxn if at end
-            exit()
-        print(f'{txn_seqNo}/{txn_range[1]} Transactions logged! {num_of_new_txn} New Transactions. Done!')
+            logging_range[1] = txn_seqNo + BATCHSIZE + 1 # put check here? to see if we are at the last transaction 
+
+        print(f'\033[1;92;40m{txn_seqNo}/{txn_range[1]} Transactions logged! {num_of_new_txn} New Transactions. Done!\033[m')
         return result
 
 
     def find_last(self):
         authD_client = gspread_authZ(self.gauth_json)
         sheet = authD_client.open(self.file_name).worksheet(self.worksheet_name)
-        first_row = sheet.row_values(2)
-        if not first_row:
-            sheet.delete_row(2)
-            self.find_last()
-        else:
-            last = int(first_row[0]) # returns as str casting to int
+        count = 0
+        while True:
+            first_row = sheet.row_values(2)
+            if not first_row:
+                count += 1
+                sheet.delete_row(2)
+            else:
+                last = int(first_row[0]) # returns as str casting to int
+                if last:
+                    if count: print(f'\033[38;5;3m{count} empty row(s) deleted ...\033[m')
+                    print('\033[1;92;40mFound last transaction in sheet ...\033[m')
+                    break
+
         return last
+
+    async def get_txn(self, pool, seq_no: int):
+        req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
+        return await pool.submit_request(req)
+
+    async def get_txn_range(self, pool, seq_nos):
+        return [await self.get_txn(pool, seq_no) for seq_no in seq_nos]
 
     def metrics(self, maintxr_response, network_name, txn_range):
         authD_client = gspread_authZ(self.gauth_json)
@@ -195,8 +215,8 @@ class main(plugin_collection.Plugin):
             num_of_txn += 1
             if txn_seqNo == txn_range[1]:
                 break
-            # This is to make sure we don't run into the google api rate limit.
-            time.sleep(2)
+            
+            time.sleep(2) # This is to make sure we don't run into the google api rate limit.
 
         print(f'\033[1;92;40m{num_of_txn} transactions added to {self.file_name} in sheet {self.worksheet_name}.\033[m')
         return txn_seqNo

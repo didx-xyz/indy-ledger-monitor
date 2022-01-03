@@ -6,9 +6,9 @@ The various transaction parameters returns information such as schema_id lookups
 
 An example of the JSON data returned by the call for a specific ledger transaction is provided [below](#example-ledger-info-for-a-specific-ledger-transaction).
 
-*No authourised DID is required and this tool can always be run with the -a parameter so that it run in anonymous mode.*
+*No authorized DID is required and this tool will always run in anonymous mode when run without a DID.*
 
-The easiest way to use this now is to use the `./run` script and the Docker build process provide in this folder. Work is in progress to add a CI/CD capability to `indy-vdr` so that the artifacts are published to PyPi and native Python apps can be used. In the meantime, we recommend either making changes to the included Python script, or better, just adding programs that read from standard input and process the output of the `./run` script.
+The easiest way to use this now is to use the `./run` script and the Docker build process provide in this folder. Work is in progress to add a CI/CD capability to `indy-vdr` so that the artifacts are published to PyPi and native Python apps can be used. In the meantime, we recommend building your own [plug-in](plugins/README.md).
 
 ## How To Run
 
@@ -74,35 +74,35 @@ To get the details for the known networks available for use with the `--net` opt
 
 To run the ledger info script, run the following command in your bash terminal from the `fetch-ledger-tx` folder in the `indy-ledger-monitor` clone:
 
-*This repo don't require any privileged DID and the `-a` parameter can be used at all times.*
+*This repo dose not require any privileged DID and can be used without one at all times.*
 
 To fetch pool transactions, run:
 ``` bash
-./run.sh -a --net=<netId> --pooltx True
+./run.sh --net <netId> --pooltx
 ```
 or
 ``` bash
-./run.sh -a --genesis-url=<URL> --pooltx True
+./run.sh --genesis-url <URL> --pooltx
 ```
 
 To fetch a specific main ledger transaction use the `--maintx` argument and provide a transaction sequence number;
 ``` bash
-./run.sh -a --net=<netId> --maintx 1
+./run.sh --net <netId> --maintx 1
 ```
 
 To fetch a range of main ledger transactions use the `--maintxr` argument and provide a transaction sequence number range;
 ``` bash
-./run.sh -a --net=<netId> --maintxr 1-5
+./run.sh --net <netId> --maintxr 1-5
 ```
 
 To fetch a schema id from the ledger use the `--schemaid` argument and provide a schema id;
 ``` bash
-./run.sh -a --net=<netId> --schemaid QXdMLmAKZmQBhnvXHxKn78:2:SURFNetSchema:1.0
+./run.sh --net <netId> --schemaid QXdMLmAKZmQBhnvXHxKn78:2:SURFNetSchema:1.0
 ```
 
 To fetch a credential definition id from the ledger use the `--credid` argument and provide a transaction credential definition id;
 ``` bash
-./run.sh -a --net=<netId> --credid A9Rsuu7FNquw8Ne2Smu5Nr:3:CL:15:tag
+./run.sh --net <netId> --credid A9Rsuu7FNquw8Ne2Smu5Nr:3:CL:15:tag
 ```
 
 To fetch a NYM from the ledger use the `--nym` argument and provide a NYM;
@@ -118,11 +118,11 @@ For the first test run using von-network:
 If you are running locally, the full command is:
 
 ``` bash
-./run.sh --net=vn -a --pooltx True
+./run.sh --net vn --pooltx
 ```
 or
 ``` bash
-./run.sh --genesis-url=http://localhost:9000/genesis -a --pooltx True
+./run.sh --genesis-url http://localhost:9000/genesis --pooltx
 ```
 
 If running in the browser, you will have to get the URL for the Genesis file (as described above) and replace the `localhost` URL above.
@@ -143,11 +143,15 @@ Do not write the Seeds in a public form. The use of environment variables for th
 
 Did I mention: **DO NOT SHARE DID SEEDS**?
 
+## Plug-ins
+
+For info on plug-ins see the plug-ins [readme](plugins/README.md).
+
 ## Example ledger info for a specific ledger transaction
 
 The following is an example of the data for a single ledger transaction from Sovrin Mainnet:
 
-` ./run.sh --net=smn --maintx 1`
+` ./run.sh --net smn --maintx 1`
 
 ```JSONC
 {
