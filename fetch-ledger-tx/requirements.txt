@@ -1,0 +1,5 @@
+asyncio
+pynacl
+gspread
+oauth2client
+pickledb
