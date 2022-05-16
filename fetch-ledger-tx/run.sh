@@ -101,5 +101,9 @@ if [ -d "./plugins" ]; then
   cmd+=$(getVolumeMount "./plugins")
 fi
 
+if [ -d "./logs/" ]; then
+  cmd+=$(getVolumeMount "./logs/")
+fi
+
 cmd+="$program_name \"$@\""
 eval ${cmd}

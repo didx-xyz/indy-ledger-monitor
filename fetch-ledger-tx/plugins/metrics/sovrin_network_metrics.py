@@ -7,6 +7,7 @@ from indy_vdr.ledger import (
 import os
 import datetime
 import time
+import csv
 from .google_sheets import gspread_authZ
 
 class main(plugin_collection.Plugin):
@@ -17,13 +18,17 @@ class main(plugin_collection.Plugin):
         self.name = 'Sovrin Network Metrics'
         self.description = ''
         self.type = ''
+        self.csv = None
         self.gauth_json = None
+        self.authD_client = None
         self.file_name = None
         self.worksheet_name = None
         self.batchsize = None
+        self.log_path = None
 
     def parse_args(self, parser):
         parser.add_argument("--mlog", action="store_true", help="Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name. ex: --mlog --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]")
+        parser.add_argument("--csv", default=int(os.environ.get('CSV') or '0'), help="Store as CSV instead of posting to google sheets. Takes number as input. ex: -- csv [Transaction Sequence Number]")
         parser.add_argument("--json", default=os.environ.get('JSON') , help="Google API Credentials json file name (file must be in root folder). Can be specified using the 'JSON' environment variable.", nargs='*')
         parser.add_argument("--file", default=os.environ.get('FILE') , help="Specify which google sheets file you want to log too. Can be specified using the 'FILE' environment variable.", nargs='*')
         parser.add_argument("--worksheet", default=os.environ.get('WORKSHEET') , help="Specify which worksheet you want to log too. Can be specified using the 'WORKSHEET' environment variable.", nargs='*')
@@ -42,12 +47,14 @@ class main(plugin_collection.Plugin):
             args.worksheet = ' '.join(args.worksheet)
 
         if args.mlog:
-            if args.json and args.file and args.worksheet:
-                self.enabled = args.mlog
+            self.enabled = args.mlog
+            self.batchsize = args.batchsize
+            if args.csv:
+                self.csv = args.csv
+            elif args.json and args.file and args.worksheet:
                 self.gauth_json = args.json
                 self.file_name = args.file
                 self.worksheet_name = args.worksheet
-                self.batchsize = args.batchsize
             else:
                 print('Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name.')
                 print('ex: --mlog  --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]')
@@ -60,7 +67,22 @@ class main(plugin_collection.Plugin):
         MAX_BATCH_SIZE = 100
         BATCHSIZE = 10 # Default amount of txn to fetch from pool
 
-        last_logged_txn = [self.find_last()]                                     # Get last txn that was logged
+        if not self.csv:
+            sheet = self.get_authD()
+            last_logged_txn = [self.find_last(sheet)]                           # Get last txn that was logged
+        else:
+            # Set up logging file.
+            self.log_path = f'./logs/{network_name}/'
+            # Create directory.
+            if not os.path.exists(self.log_path):
+                os.mkdir(self.log_path)
+                print(f'Directory {self.log_path} created ...')
+
+            sheet = None
+            last_logged_txn = [int(self.csv)]  
+
+        print(last_logged_txn)
+
         txn_range[0] = last_logged_txn[0] + 1                                    # Get the next txn: txn_range[*next_txn, ledger_size]
         maintxr_response = await self.get_txn_range(pool, list(last_logged_txn)) # Run the last logged txn to get ledger size
         txn_range[1] = maintxr_response[0]["data"]["ledgerSize"]                 # Get ledger size: txn_range[next_txn, *ledger_size]
@@ -92,7 +114,7 @@ class main(plugin_collection.Plugin):
         while True:
             print(f'\033[1;92;40mLogging transactions {logging_range[0]}-{logging_range[1]-1}\033[m')
             maintxr_response = await self.get_txn_range(pool, list(range(logging_range[0],logging_range[1])))
-            txn_seqNo = self.metrics(maintxr_response, network_name, txn_range)
+            txn_seqNo = self.metrics(maintxr_response, network_name, txn_range, sheet)
             if txn_seqNo == txn_range[1]:
                 break
             remaining_txns = int(txn_range[1]) - int(logging_range[1]-1)
@@ -104,10 +126,18 @@ class main(plugin_collection.Plugin):
         print(f'\033[1;92;40m{txn_seqNo}/{txn_range[1]} Transactions logged! {num_of_new_txn} New Transactions. Done!\033[m')
         return result
 
-
-    def find_last(self):
+    def get_authD(self):
         authD_client = gspread_authZ(self.gauth_json)
-        sheet = authD_client.open(self.file_name).worksheet(self.worksheet_name)
+        try:
+            authD_sheet = authD_client.open(self.file_name).worksheet(self.worksheet_name) # Open sheet
+            print("Google sheet authenticated ... ")
+            return authD_sheet
+        except:
+            print("\033[1;31;40mUnable to upload data to sheet! Please check file and worksheet name and try again.")
+            print(f'File name entered: {self.file_name}. Worksheet name entered: {self.worksheet_name}.\033[m')
+            exit()
+
+    def find_last(self, sheet):
         count = 0
         while True:
             first_row = sheet.row_values(2)
@@ -119,9 +149,7 @@ class main(plugin_collection.Plugin):
                 if last:
                     if count: print(f'\033[38;5;3m{count} empty row(s) deleted ...\033[m')
                     print('\033[1;92;40mFound last transaction in sheet ...\033[m')
-                    break
-
-        return last
+                    return last
 
     async def get_txn(self, pool, seq_no: int):
         req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
@@ -130,14 +158,7 @@ class main(plugin_collection.Plugin):
     async def get_txn_range(self, pool, seq_nos):
         return [await self.get_txn(pool, seq_no) for seq_no in seq_nos]
 
-    def metrics(self, maintxr_response, network_name, txn_range):
-        authD_client = gspread_authZ(self.gauth_json)
-        try:
-            sheet = authD_client.open(self.file_name).worksheet(self.worksheet_name) # Open sheet
-        except:
-            print("\033[1;31;40mUnable to upload data to sheet! Please check file and worksheet name and try again.")
-            print(f'File name entered: {self.file_name}. Worksheet name entered: {self.worksheet_name}.\033[m')
-            exit()
+    def metrics(self, maintxr_response, network_name, txn_range, sheet):
         num_of_txn = 0
 
         for txn in maintxr_response:
@@ -211,12 +232,20 @@ class main(plugin_collection.Plugin):
             
             row = [txn_seqNo, txn_type, txn_time, endorser, txn_from, txn_date, REVOC_REG_ENTRY, REVOC_REG_DEF, CLAIM_DEF, NYM, ATTRIB, SCHEMA]
             print(row)
-            sheet.insert_row(row, 2,value_input_option='USER_ENTERED')
+
+            if self.csv:
+                csv_file_path = f'{self.log_path}log.csv'
+                with open(csv_file_path,'a') as csv_file:
+                    writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONE)
+                    writer.writerow(row)
+
+            if not self.csv:
+                sheet.insert_row(row, 2,value_input_option='USER_ENTERED')
+                time.sleep(2) # This is to make sure we don't run into the google api rate limit.
+
             num_of_txn += 1
             if txn_seqNo == txn_range[1]:
                 break
-            
-            time.sleep(2) # This is to make sure we don't run into the google api rate limit.
 
         print(f'\033[1;92;40m{num_of_txn} transactions added to {self.file_name} in sheet {self.worksheet_name}.\033[m')
         return txn_seqNo
