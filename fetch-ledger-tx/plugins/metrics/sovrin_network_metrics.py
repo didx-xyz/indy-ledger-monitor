@@ -28,11 +28,11 @@ class main(plugin_collection.Plugin):
 
     def parse_args(self, parser):
         parser.add_argument("--mlog", action="store_true", help="Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name. ex: --mlog --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]")
-        parser.add_argument("--csv", default=int(os.environ.get('CSV') or '0'), help="Store as CSV instead of posting to google sheets. Takes number as input. ex: -- csv [Transaction Sequence Number]")
+        parser.add_argument("--csv", default=os.environ.get('CSV') or 0, help="Store as CSV instead of posting to google sheets. Takes number as input. ex: -- csv [Transaction Sequence Number]")
         parser.add_argument("--json", default=os.environ.get('JSON') , help="Google API Credentials json file name (file must be in root folder). Can be specified using the 'JSON' environment variable.", nargs='*')
         parser.add_argument("--file", default=os.environ.get('FILE') , help="Specify which google sheets file you want to log too. Can be specified using the 'FILE' environment variable.", nargs='*')
         parser.add_argument("--worksheet", default=os.environ.get('WORKSHEET') , help="Specify which worksheet you want to log too. Can be specified using the 'WORKSHEET' environment variable.", nargs='*')
-        parser.add_argument("--batchsize", default=int(os.environ.get('BATCHSIZE') or '0') , help="Specify the read/write batch size. Not Required. Default is 10. Can be specified using the 'STORELOGS' environment variable.")
+        parser.add_argument("--batchsize", default=os.environ.get('BATCHSIZE') or 0, help="Specify the read/write batch size. Not Required. Default is 10. Can be specified using the 'STORELOGS' environment variable.")
 
     def load_parse_args(self, args):
         global verbose
@@ -48,9 +48,9 @@ class main(plugin_collection.Plugin):
 
         if args.mlog:
             self.enabled = args.mlog
-            self.batchsize = args.batchsize
+            self.batchsize = int(args.batchsize)
             if args.csv:
-                self.csv = args.csv
+                self.csv = int(args.csv)
             elif args.json and args.file and args.worksheet:
                 self.gauth_json = args.json
                 self.file_name = args.file
@@ -61,25 +61,24 @@ class main(plugin_collection.Plugin):
                 exit()
         
     async def perform_operation(self, pool, result, network_name):
-        txn_range = [None] * 2
-        logging_range = [None] * 2 
-        int_batchsize = int(self.batchsize)
+        txn_range, logging_range = [None] * 2, [None] * 2
         MAX_BATCH_SIZE = 100
         BATCHSIZE = 10 # Default amount of txn to fetch from pool
 
         if not self.csv:
+            # set up for engine
             sheet = self.get_authD()
             last_logged_txn = [self.find_last(sheet)]                           # Get last txn that was logged
         else:
             # Set up logging file.
             self.log_path = f'./logs/{network_name}/'
-            # Create directory.
+            # Create directory if needed.
             if not os.path.exists(self.log_path):
                 os.mkdir(self.log_path)
                 print(f'Directory {self.log_path} created ...')
-
+            # set up for engine
             sheet = None
-            last_logged_txn = [int(self.csv)]  
+            last_logged_txn = [self.csv]  
 
         print(last_logged_txn)
 
@@ -92,13 +91,13 @@ class main(plugin_collection.Plugin):
             print("\033[1;92;40mNo New Transactions. Exiting...\033[m") 
             exit()
         
-        if int_batchsize == 0:
+        if self.batchsize == 0:
             print(f'\033[1;33mNumber of stored logs not specifed. Storing {BATCHSIZE} logs if avalible.\033[m')
-        elif int_batchsize > MAX_BATCH_SIZE:
+        elif self.batchsize > MAX_BATCH_SIZE:
             BATCHSIZE = MAX_BATCH_SIZE
-            print(f'\033[1;33mThe reqested batch size ({int_batchsize}) is to large. Setting to {BATCHSIZE}.\033[m')
+            print(f'\033[1;33mThe reqested batch size ({self.batchsize}) is to large. Setting to {BATCHSIZE}.\033[m')
         else:
-            BATCHSIZE = int_batchsize
+            BATCHSIZE = self.batchsize
             print(f'\033[1;92;40mStoring {BATCHSIZE} logs if avalible ...\033[m')
 
         if num_of_new_txn < BATCHSIZE:                                           # Run to the end of the new txn if its less then the log interval
@@ -152,8 +151,18 @@ class main(plugin_collection.Plugin):
                     return last
 
     async def get_txn(self, pool, seq_no: int):
-        req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
-        return await pool.submit_request(req)
+        for i in reversed(range(3)):
+            try:
+                req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
+                return await pool.submit_request(req)
+            except BaseException as e:
+                log("Unable to submit pool request. Trying again ...")
+                print(e)
+                if not i:
+                    print("Unable to submit pool request.  3 attempts where made.  Exiting ...")
+                    exit()
+                time.sleep(5)
+                continue
 
     async def get_txn_range(self, pool, seq_nos):
         return [await self.get_txn(pool, seq_no) for seq_no in seq_nos]
@@ -162,12 +171,7 @@ class main(plugin_collection.Plugin):
         num_of_txn = 0
 
         for txn in maintxr_response:
-            REVOC_REG_ENTRY = 0
-            REVOC_REG_DEF = 0 
-            CLAIM_DEF = 0
-            NYM = 0
-            ATTRIB = 0
-            SCHEMA = 0
+            REVOC_REG_ENTRY, REVOC_REG_DEF, CLAIM_DEF, NYM, ATTRIB, SCHEMA = 0, 0, 0, 0, 0, 0
 
             txn_seqNo = txn["seqNo"]
             txn_type = txn["data"]["txn"]["type"]
