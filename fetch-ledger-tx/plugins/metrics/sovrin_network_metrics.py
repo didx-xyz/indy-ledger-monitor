@@ -6,8 +6,10 @@ from indy_vdr.ledger import (
 )
 import os
 import datetime
-import time
 import csv
+from time import sleep
+from math import ceil
+from collections import namedtuple
 from .google_sheets import gspread_authZ
 
 class main(plugin_collection.Plugin):
@@ -61,14 +63,15 @@ class main(plugin_collection.Plugin):
                 exit()
         
     async def perform_operation(self, pool, result, network_name):
-        txn_range, logging_range = [None] * 2, [None] * 2
+        logging_range = [None] * 2
+        Txn_scope = namedtuple('Txn_scope', ['min', 'range', 'max'])
         MAX_BATCH_SIZE = 100
         BATCHSIZE = 10 # Default amount of txn to fetch from pool
 
         if not self.csv:
             # set up for engine
             sheet = self.get_authD()
-            last_logged_txn = [self.find_last(sheet)]                           # Get last txn that was logged
+            last_logged_txn = [self.find_last(sheet)] # Get last txn that was logged
         else:
             # Set up logging file.
             self.log_path = f'./logs/{network_name}/'
@@ -80,49 +83,50 @@ class main(plugin_collection.Plugin):
             sheet = None
             last_logged_txn = [self.csv]  
 
-        print(last_logged_txn)
+        maintxr_response = await self.get_txn_range(pool, last_logged_txn) # Run the last logged txn to get ledger size
+        txn_min = last_logged_txn[0] + 1 # Get the next txn.
+        txn_max = maintxr_response[0]["data"]["ledgerSize"] # Get ledger size.
+        txn_range = txn_max - txn_min + 1 # Find how many new txn there are.
 
-        txn_range[0] = last_logged_txn[0] + 1                                    # Get the next txn: txn_range[*next_txn, ledger_size]
-        maintxr_response = await self.get_txn_range(pool, list(last_logged_txn)) # Run the last logged txn to get ledger size
-        txn_range[1] = maintxr_response[0]["data"]["ledgerSize"]                 # Get ledger size: txn_range[next_txn, *ledger_size]
-        num_of_new_txn = txn_range[1] - txn_range[0] + 1                         # Find how many new txn there are.
+        txn_scope = Txn_scope(txn_min, txn_range, txn_max)
 
-        if num_of_new_txn == 0:                                                  # If no new txn exit()
+        if txn_scope.range == 0: # If no new txn exit()
             print("\033[1;92;40mNo New Transactions. Exiting...\033[m") 
             exit()
-        
-        if self.batchsize == 0:
-            print(f'\033[1;33mNumber of stored logs not specifed. Storing {BATCHSIZE} logs if avalible.\033[m')
-        elif self.batchsize > MAX_BATCH_SIZE:
-            BATCHSIZE = MAX_BATCH_SIZE
-            print(f'\033[1;33mThe reqested batch size ({self.batchsize}) is to large. Setting to {BATCHSIZE}.\033[m')
-        else:
-            BATCHSIZE = self.batchsize
-            print(f'\033[1;92;40mStoring {BATCHSIZE} logs if avalible ...\033[m')
-
-        if num_of_new_txn < BATCHSIZE:                                           # Run to the end of the new txn if its less then the log interval
-            logging_range[0] = txn_range[0]
-            logging_range[1] = txn_range[1] + 1
-        else:                                                                    # Set log interval to only grab a few txn's at a time if there are more txn then batchsize
-            logging_range[0] = txn_range[0]
-            logging_range[1] = txn_range[0] + BATCHSIZE
 
         #------------------- Below won't run unless there are new txns ----------------------------------
+        
+        if self.batchsize == 0:
+            print(f'\033[1;33mNumber of stored logs not specified. Storing {BATCHSIZE} logs if available.\033[m')
+        elif self.batchsize > MAX_BATCH_SIZE:
+            BATCHSIZE = MAX_BATCH_SIZE
+            print(f'\033[1;33mThe requested batch size ({self.batchsize}) is to large. Setting to {BATCHSIZE}.\033[m')
+        else:
+            BATCHSIZE = self.batchsize
+            print(f'\033[1;92;40mStoring {BATCHSIZE} logs if available ...\033[m')
 
-        print(f'\033[1;92;40mLast transaction logged: {last_logged_txn[0]}\nTransaction Range: {txn_range[0]}-{txn_range[1]}\n{num_of_new_txn} new transactions.\033[m')
-        while True:
-            print(f'\033[1;92;40mLogging transactions {logging_range[0]}-{logging_range[1]-1}\033[m')
+        if txn_scope.range < BATCHSIZE: # Run to the end of the new txn if its less then the log interval
+            logging_range[0] = txn_scope.min
+            logging_range[1] = txn_scope.max + 1
+        else:                          # Set log interval to only grab a few txn's at a time if there are more txn then batchsize
+            logging_range[0] = txn_scope.min
+            logging_range[1] = txn_scope.min + BATCHSIZE
+
+        print(f'\033[1;92;40mLast transaction logged: {last_logged_txn[0]}\nTransaction Range: {txn_scope.min}-{txn_scope.max}\n{txn_scope.range} new transactions.\033[m')
+        attempts = ceil(txn_scope.range / BATCHSIZE) # Set up for loop
+        for _ in range(attempts, 0, -1):
+            print(f'\033[1;92;40mGetting transactions {logging_range[0]}-{logging_range[1]-1}\033[m')
             maintxr_response = await self.get_txn_range(pool, list(range(logging_range[0],logging_range[1])))
-            txn_seqNo = self.metrics(maintxr_response, network_name, txn_range, sheet)
-            if txn_seqNo == txn_range[1]:
+            txn_seqNo = self.metrics(maintxr_response, network_name, txn_scope, sheet)
+            if txn_seqNo == txn_scope.max:
                 break
-            remaining_txns = int(txn_range[1]) - int(logging_range[1]-1)
+            remaining_txns = int(txn_scope.max) - int(logging_range[1]-1)
             print(f'\033[1;92;40mTransactions {last_logged_txn[0]+1}-{logging_range[1]-1} added.\n{remaining_txns} transactions remaining.\033[m')
 
             logging_range[0] = txn_seqNo + 1
-            logging_range[1] = txn_seqNo + BATCHSIZE + 1 # put check here? to see if we are at the last transaction 
+            logging_range[1] = txn_seqNo + BATCHSIZE + 1
 
-        print(f'\033[1;92;40m{txn_seqNo}/{txn_range[1]} Transactions logged! {num_of_new_txn} New Transactions. Done!\033[m')
+        print(f'\033[1;92;40m{txn_seqNo}/{txn_scope.max} Transactions logged! {txn_scope.range} New Transactions. Done!\033[m')
         return result
 
     def get_authD(self):
@@ -151,7 +155,7 @@ class main(plugin_collection.Plugin):
                     return last
 
     async def get_txn(self, pool, seq_no: int):
-        for i in reversed(range(3)):
+        for i in range(3, 0, -1):
             try:
                 req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
                 return await pool.submit_request(req)
@@ -161,13 +165,13 @@ class main(plugin_collection.Plugin):
                 if not i:
                     print("Unable to submit pool request.  3 attempts where made.  Exiting ...")
                     exit()
-                time.sleep(5)
+                sleep(5)
                 continue
 
     async def get_txn_range(self, pool, seq_nos):
         return [await self.get_txn(pool, seq_no) for seq_no in seq_nos]
 
-    def metrics(self, maintxr_response, network_name, txn_range, sheet):
+    def metrics(self, maintxr_response, network_name, txn_scope, sheet):
         num_of_txn = 0
 
         for txn in maintxr_response:
@@ -245,10 +249,10 @@ class main(plugin_collection.Plugin):
 
             if not self.csv:
                 sheet.insert_row(row, 2,value_input_option='USER_ENTERED')
-                time.sleep(2) # This is to make sure we don't run into the google api rate limit.
+                sleep(1) # This is to make sure we don't run into the google api rate limit.
 
             num_of_txn += 1
-            if txn_seqNo == txn_range[1]:
+            if txn_seqNo == txn_scope.max:
                 break
 
         print(f'\033[1;92;40m{num_of_txn} transactions added to {self.file_name} in sheet {self.worksheet_name}.\033[m')
