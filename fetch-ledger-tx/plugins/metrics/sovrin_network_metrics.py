@@ -173,6 +173,7 @@ class main(plugin_collection.Plugin):
 
     def metrics(self, maintxr_response, network_name, txn_scope, sheet):
         num_of_txn = 0
+        data_batch = []
 
         for txn in maintxr_response:
             REVOC_REG_ENTRY, REVOC_REG_DEF, CLAIM_DEF, NYM, ATTRIB, SCHEMA = 0, 0, 0, 0, 0, 0
@@ -240,12 +241,7 @@ class main(plugin_collection.Plugin):
             
             row = [txn_seqNo, txn_type, txn_time, endorser, txn_from, txn_date, REVOC_REG_ENTRY, REVOC_REG_DEF, CLAIM_DEF, NYM, ATTRIB, SCHEMA]
             print(row)
-
-            if self.csv:
-                csv_file_path = f'{self.log_path}log.csv'
-                with open(csv_file_path,'a') as csv_file:
-                    writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONE)
-                    writer.writerow(row)
+            data_batch.append(row)
 
             if not self.csv:
                 sheet.insert_row(row, 2,value_input_option='USER_ENTERED')
@@ -254,6 +250,12 @@ class main(plugin_collection.Plugin):
             num_of_txn += 1
             if txn_seqNo == txn_scope.max:
                 break
+
+        if self.csv:
+            csv_file_path = f'{self.log_path}log.csv'
+            with open(csv_file_path,'a') as csv_file:
+                writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONE)
+                writer.writerows(data_batch)
 
         print(f'\033[1;92;40m{num_of_txn} transactions added to {self.file_name} in sheet {self.worksheet_name}.\033[m')
         return txn_seqNo
