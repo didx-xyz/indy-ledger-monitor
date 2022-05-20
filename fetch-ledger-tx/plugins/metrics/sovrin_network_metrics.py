@@ -71,7 +71,7 @@ class main(plugin_collection.Plugin):
         if not self.csv:
             # set up for engine
             sheet = self.get_authD()
-            last_logged_txn = [self.find_last(sheet)] # Get last txn that was logged
+            LAST_LOGGED_TXN = self.find_last(sheet) # Get last txn that was logged
         else:
             # Set up logging file.
             self.log_path = f'./logs/{network_name}/'
@@ -81,11 +81,11 @@ class main(plugin_collection.Plugin):
                 print(f'Directory {self.log_path} created ...')
             # set up for engine
             sheet = None
-            last_logged_txn = [self.csv]  
+            LAST_LOGGED_TXN = self.csv  
 
-        maintxr_response = await self.get_txn_range(pool, last_logged_txn) # Run the last logged txn to get ledger size
-        txn_min = last_logged_txn[0] + 1 # Get the next txn.
-        txn_max = maintxr_response[0]["data"]["ledgerSize"] # Get ledger size.
+        maintxr_response = await self.get_txn(pool, LAST_LOGGED_TXN) # Run the last logged txn to get ledger size
+        txn_min = LAST_LOGGED_TXN + 1 # Get the next txn.
+        txn_max = maintxr_response["data"]["ledgerSize"] # Get ledger size.
         txn_range = txn_max - txn_min + 1 # Find how many new txn there are.
 
         txn_scope = Txn_scope(txn_min, txn_range, txn_max)
@@ -112,7 +112,7 @@ class main(plugin_collection.Plugin):
             logging_range[0] = txn_scope.min
             logging_range[1] = txn_scope.min + BATCHSIZE
 
-        print(f'\033[1;92;40mLast transaction logged: {last_logged_txn[0]}\nTransaction Range: {txn_scope.min}-{txn_scope.max}\n{txn_scope.range} new transactions.\033[m')
+        print(f'\033[1;92;40mLast transaction logged: {LAST_LOGGED_TXN}\nTransaction Range: {txn_scope.min}-{txn_scope.max}\n{txn_scope.range} new transactions.\033[m')
         attempts = ceil(txn_scope.range / BATCHSIZE) # Set up for loop
         for _ in range(attempts, 0, -1):
             print(f'\033[1;92;40mGetting transactions {logging_range[0]}-{logging_range[1]-1}\033[m')
@@ -121,7 +121,7 @@ class main(plugin_collection.Plugin):
             if txn_seqNo == txn_scope.max:
                 break
             remaining_txns = int(txn_scope.max) - int(logging_range[1]-1)
-            print(f'\033[1;92;40mTransactions {last_logged_txn[0]+1}-{logging_range[1]-1} added.\n{remaining_txns} transactions remaining.\033[m')
+            print(f'\033[1;92;40mTransactions {txn_scope.min}-{logging_range[1]-1} added.\n{remaining_txns} transactions remaining.\033[m')
 
             logging_range[0] = txn_seqNo + 1
             logging_range[1] = txn_seqNo + BATCHSIZE + 1
