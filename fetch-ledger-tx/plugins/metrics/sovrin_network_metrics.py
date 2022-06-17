@@ -12,6 +12,7 @@ from math import ceil
 from collections import namedtuple
 from googleapiclient.errors import HttpError
 from .google_sheets import gspread_authZ
+from util import log
 
 import json
 
@@ -34,9 +35,9 @@ class main(plugin_collection.Plugin):
         parser.add_argument("--mlog", action="store_true", help="Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name. ex: --mlog --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]")
         parser.add_argument("--csv", default=os.environ.get('CSV') or 0, help="Store as CSV instead of posting to google sheets. Takes number as input. ex: -- csv [Transaction Sequence Number]")
         parser.add_argument("--json", default=os.environ.get('JSON') , help="Google API Credentials json file name (file must be in root folder). Can be specified using the 'JSON' environment variable.", nargs='*')
-        parser.add_argument("--fileID", default=os.environ.get('FILEID') , help="Specify which google sheets file id you want to log too (In the URL after /d/). Can be specified using the 'FILEID' environment variable.", nargs='*')
+        parser.add_argument("--fileid", default=os.environ.get('FILEID') , help="Specify which google sheets file id you want to log too (In the URL after /d/). Can be specified using the 'FILEID' environment variable.", nargs='*')
         parser.add_argument("--worksheet", default=os.environ.get('WORKSHEET') , help="Specify which worksheet you want to log too. Can be specified using the 'WORKSHEET' environment variable.", nargs='*')
-        parser.add_argument("--batchsize", default=os.environ.get('BATCHSIZE') or 0, help="Specify the read/write batch size. Not Required. Default is 10. Can be specified using the 'STORELOGS' environment variable.")
+        parser.add_argument("--batchsize", default=os.environ.get('BATCHSIZE') or 0, help="Specify the read/write batch size. Not Required. Default is 10. Can be specified using the 'BATCHSIZE' environment variable.")
 
     def load_parse_args(self, args):
         global verbose
@@ -45,8 +46,8 @@ class main(plugin_collection.Plugin):
         # Other workarounds including the standard of putting '"'s around values containing spaces does not always work.
         if args.json:
             args.json = ' '.join(args.json)
-        if args.fileID:
-            args.fileID = ' '.join(args.fileID)
+        if args.fileid:
+            args.fileid = ' '.join(args.fileid)
         if args.worksheet:
             args.worksheet = ' '.join(args.worksheet)
 
@@ -55,13 +56,13 @@ class main(plugin_collection.Plugin):
             self.batchsize = int(args.batchsize)
             if args.csv:
                 self.csv = int(args.csv)
-            elif args.json and args.fileID and args.worksheet:
+            elif args.json and args.fileid and args.worksheet:
                 self.gauth_json = args.json
-                self.file_id = args.fileID
+                self.file_id = args.fileid
                 self.worksheet_name = args.worksheet
             else:
-                print('Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file ID (In the URL after /d/) and worksheet name.')
-                print('ex: --mlog  --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]')
+                log('Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file ID (In the URL after /d/) and worksheet name.')
+                log('ex: --mlog  --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]')
                 exit()
         
     async def perform_operation(self, pool, result, network_name):
@@ -80,7 +81,7 @@ class main(plugin_collection.Plugin):
             # Create directory if needed.
             if not os.path.exists(self.log_path):
                 os.mkdir(self.log_path)
-                print(f'Directory {self.log_path} created ...')
+                log(f'Directory {self.log_path} created ...')
             # set up for engine
             AUTHD_CLIENT = None
             LAST_LOGGED_TXN = self.csv  
@@ -93,19 +94,19 @@ class main(plugin_collection.Plugin):
         txn_scope = Txn_scope(txn_min, txn_range, txn_max)
 
         if txn_scope.range == 0: # If no new txn exit()
-            print("\033[1;92;40mNo New Transactions. Exiting...\033[m") 
+            log("\033[1;92;40mNo New Transactions. Exiting...\033[m") 
             exit()
 
         #------------------- Below won't run unless there are new txns ----------------------------------
         
         if self.batchsize == 0:
-            print(f'\033[1;33mNumber of stored logs not specified. Storing {BATCHSIZE} logs if available.\033[m')
+            log(f'\033[1;33mNumber of stored logs not specified. Storing {BATCHSIZE} logs if available.\033[m')
         elif self.batchsize > MAX_BATCH_SIZE:
             BATCHSIZE = MAX_BATCH_SIZE
-            print(f'\033[1;33mThe requested batch size ({self.batchsize}) is to large. Setting to {BATCHSIZE}.\033[m')
+            log(f'\033[1;33mThe requested batch size ({self.batchsize}) is to large. Setting to {BATCHSIZE}.\033[m')
         else:
             BATCHSIZE = self.batchsize
-            print(f'\033[1;92;40mStoring {BATCHSIZE} logs if available ...\033[m')
+            log(f'\033[1;92;40mStoring {BATCHSIZE} logs if available ...\033[m')
 
         if txn_scope.range < BATCHSIZE: # Run to the end of the new txn if its less then the log interval
             logging_range[0] = txn_scope.min
@@ -114,21 +115,21 @@ class main(plugin_collection.Plugin):
             logging_range[0] = txn_scope.min
             logging_range[1] = txn_scope.min + BATCHSIZE
 
-        print(f'\033[1;92;40mLast transaction logged: {LAST_LOGGED_TXN}\nTransaction Range: {txn_scope.min}-{txn_scope.max}\n{txn_scope.range} new transactions.\033[m')
+        log(f'\033[1;92;40mLast transaction logged: {LAST_LOGGED_TXN}\nTransaction Range: {txn_scope.min}-{txn_scope.max}\n{txn_scope.range} new transactions.\033[m')
         attempts = ceil(txn_scope.range / BATCHSIZE) # Set up for loop
         for _ in range(attempts, 0, -1):
-            print(f'\033[1;92;40mGetting transactions {logging_range[0]}-{logging_range[1]-1}\033[m')
+            log(f'\033[1;92;40mGetting transactions {logging_range[0]}-{logging_range[1]-1}\033[m')
             maintxr_response = await self.get_txn_range(pool, list(range(logging_range[0],logging_range[1])))
             txn_seqNo = self.metrics(maintxr_response, txn_scope, AUTHD_CLIENT)
             if txn_seqNo == txn_scope.max:
                 break
             remaining_txns = int(txn_scope.max) - int(logging_range[1]-1)
-            print(f'\033[1;92;40mTransactions {txn_scope.min}-{logging_range[1]-1} added.\n{remaining_txns} transactions remaining.\033[m')
+            log(f'\033[1;92;40mTransactions {txn_scope.min}-{logging_range[1]-1} added.\n{remaining_txns} transactions remaining.\033[m')
 
             logging_range[0] = txn_seqNo + 1
             logging_range[1] = txn_seqNo + BATCHSIZE + 1
 
-        print(f'\033[1;92;40m{txn_seqNo}/{txn_scope.max} Transactions logged! {txn_scope.range} New Transactions. Done!\033[m')
+        log(f'\033[1;92;40m{txn_seqNo}/{txn_scope.max} Transactions logged! {txn_scope.range} New Transactions. Done!\033[m')
 
         return result
 
@@ -136,7 +137,7 @@ class main(plugin_collection.Plugin):
         sheet_meta_data = AUTHD_CLIENT.values().get(spreadsheetId=self.file_id, range="metaData", majorDimension="COLUMNS").execute()
         sheet_id = sheet_meta_data.get('values', [])[0][1]
         last_logged_txn = int( sheet_meta_data.get('values', [])[1][1] )
-        print(json.dumps(sheet_meta_data, indent=2))
+        # log(json.dumps(sheet_meta_data, indent=2))
 
         batch_update_spreadsheet_request_body = {
             'requests': [
@@ -170,10 +171,10 @@ class main(plugin_collection.Plugin):
             }
             ],
         }
-        # print(json.dumps(batch_update_spreadsheet_request_body, indent=2))
+        # log(json.dumps(batch_update_spreadsheet_request_body, indent=2))
 
         batch_update_request = AUTHD_CLIENT.batchUpdate(spreadsheetId=self.file_id, body=batch_update_spreadsheet_request_body).execute()
-        print(json.dumps(batch_update_request, indent=2))
+        log(json.dumps(batch_update_request, indent=2))
 
         return last_logged_txn
 
@@ -183,10 +184,10 @@ class main(plugin_collection.Plugin):
                 req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
                 return await pool.submit_request(req)
             except BaseException as e:
-                print("Unable to submit pool request. Trying again ...")
-                print(e)
+                log("Unable to submit pool request. Trying again ...")
+                log(e)
                 if not i:
-                    print("Unable to submit pool request.  3 attempts where made.  Exiting ...")
+                    log("Unable to submit pool request.  3 attempts where made.  Exiting ...")
                     exit()
                 sleep(5)
                 continue
@@ -260,16 +261,16 @@ class main(plugin_collection.Plugin):
             elif txn_type == '20000': 
                 txn_type = 'SET_FEES'
             else:
-                print("error")
+                log("error")
             
             row = [txn_seqNo, txn_type, txn_time, endorser, txn_from, txn_date, REVOC_REG_ENTRY, REVOC_REG_DEF, CLAIM_DEF, NYM, ATTRIB, SCHEMA]
-            print(row)
+            log(row)
             data_batch.append(row)
 
             num_of_txn += 1
             if txn_seqNo == txn_scope.max:
                 break
-
+        
         if self.csv:
             csv_file_path = f'{self.log_path}log.csv'
             with open(csv_file_path,'a') as csv_file:
@@ -281,9 +282,9 @@ class main(plugin_collection.Plugin):
                 request = AUTHD_CLIENT.values().append(spreadsheetId=self.file_id, range=f"{self.worksheet_name}!A2", valueInputOption="USER_ENTERED", body={"values":data_batch})
                 request.execute()
             except HttpError as e:
-                print(e)
+                log(e)
                 exit()
 
 
-        print(f'\033[1;92;40m{num_of_txn} transactions added to {self.file_id} in sheet {self.worksheet_name}.\033[m')
+        log(f'\033[1;92;40m{num_of_txn} transactions added to {self.file_id} in sheet {self.worksheet_name}.\033[m')
         return txn_seqNo
