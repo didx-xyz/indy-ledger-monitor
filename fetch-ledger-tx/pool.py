@@ -12,22 +12,17 @@ class PoolCollection(object, metaclass=Singleton):
         self.lock = asyncio.Lock()
 
     async def __fetch_pool_connection(self, genesis_path):
-        attempt = 3
-        while attempt:
+        for i in range(3, 0, -1):
             try:
                 log("Connecting to Pool ...")
                 pool = await open_pool(transactions_path=genesis_path)
+                return pool
             except:
                 log("Pool Timed Out! Trying again ...")
-                if not attempt:
-                    print("Unable to get response from pool!  3 attempts where made.  Exiting ...")
+                if not i:
+                    print("Unable to connect to pool!  3 attempts where made.  Exiting ...")
                     exit()
-                attempt -= 1
                 continue
-            else:
-                log("Connected to Pool ...")
-            break
-        return pool
 
     async def get_pool(self, network_id):
         network = self.networks.resolve(network_id)

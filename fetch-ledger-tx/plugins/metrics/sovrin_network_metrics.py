@@ -6,8 +6,15 @@ from indy_vdr.ledger import (
 )
 import os
 import datetime
-import time
+import csv
+from time import sleep
+from math import ceil
+from collections import namedtuple
+from googleapiclient.errors import HttpError
 from .google_sheets import gspread_authZ
+from util import log
+
+import json
 
 class main(plugin_collection.Plugin):
     
@@ -17,17 +24,20 @@ class main(plugin_collection.Plugin):
         self.name = 'Sovrin Network Metrics'
         self.description = ''
         self.type = ''
+        self.csv = None
         self.gauth_json = None
-        self.file_name = None
+        self.file_id = None
         self.worksheet_name = None
         self.batchsize = None
+        self.log_path = None
 
     def parse_args(self, parser):
         parser.add_argument("--mlog", action="store_true", help="Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name. ex: --mlog --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]")
+        parser.add_argument("--csv", default=os.environ.get('CSV') or 0, help="Store as CSV instead of posting to google sheets. Takes number as input. ex: -- csv [Transaction Sequence Number]")
         parser.add_argument("--json", default=os.environ.get('JSON') , help="Google API Credentials json file name (file must be in root folder). Can be specified using the 'JSON' environment variable.", nargs='*')
-        parser.add_argument("--file", default=os.environ.get('FILE') , help="Specify which google sheets file you want to log too. Can be specified using the 'FILE' environment variable.", nargs='*')
+        parser.add_argument("--fileid", default=os.environ.get('FILEID') , help="Specify which google sheets file id you want to log too (In the URL after /d/). Can be specified using the 'FILEID' environment variable.", nargs='*')
         parser.add_argument("--worksheet", default=os.environ.get('WORKSHEET') , help="Specify which worksheet you want to log too. Can be specified using the 'WORKSHEET' environment variable.", nargs='*')
-        parser.add_argument("--batchsize", default=int(os.environ.get('BATCHSIZE') or '0') , help="Specify the read/write batch size. Not Required. Default is 10. Can be specified using the 'STORELOGS' environment variable.")
+        parser.add_argument("--batchsize", default=os.environ.get('BATCHSIZE') or 0, help="Specify the read/write batch size. Not Required. Default is 10. Can be specified using the 'BATCHSIZE' environment variable.")
 
     def load_parse_args(self, args):
         global verbose
@@ -36,117 +46,161 @@ class main(plugin_collection.Plugin):
         # Other workarounds including the standard of putting '"'s around values containing spaces does not always work.
         if args.json:
             args.json = ' '.join(args.json)
-        if args.file:
-            args.file = ' '.join(args.file)
+        if args.fileid:
+            args.fileid = ' '.join(args.fileid)
         if args.worksheet:
             args.worksheet = ' '.join(args.worksheet)
 
         if args.mlog:
-            if args.json and args.file and args.worksheet:
-                self.enabled = args.mlog
+            self.enabled = args.mlog
+            self.batchsize = int(args.batchsize)
+            if args.csv:
+                self.csv = int(args.csv)
+            elif args.json and args.fileid and args.worksheet:
                 self.gauth_json = args.json
-                self.file_name = args.file
+                self.file_id = args.fileid
                 self.worksheet_name = args.worksheet
-                self.batchsize = args.batchsize
             else:
-                print('Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file name and worksheet name.')
-                print('ex: --mlog  --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]')
+                log('Metrics log argument uses google sheets api and requires, Google API Credentials json file name (file must be in root folder), google sheet file ID (In the URL after /d/) and worksheet name.')
+                log('ex: --mlog  --batchsize [Number (Not Required)] --json [Json File Name] --file [Google Sheet File Name] --worksheet [Worksheet name]')
                 exit()
         
     async def perform_operation(self, pool, result, network_name):
-        txn_range = [None] * 2
-        logging_range = [None] * 2 
-        int_batchsize = int(self.batchsize)
+        logging_range = [None] * 2
+        Txn_scope = namedtuple('Txn_scope', ['min', 'range', 'max'])
         MAX_BATCH_SIZE = 100
         BATCHSIZE = 10 # Default amount of txn to fetch from pool
 
-        last_logged_txn = [self.find_last()]                                     # Get last txn that was logged
-        txn_range[0] = last_logged_txn[0] + 1                                    # Get the next txn: txn_range[*next_txn, ledger_size]
-        maintxr_response = await self.get_txn_range(pool, list(last_logged_txn)) # Run the last logged txn to get ledger size
-        txn_range[1] = maintxr_response[0]["data"]["ledgerSize"]                 # Get ledger size: txn_range[next_txn, *ledger_size]
-        num_of_new_txn = txn_range[1] - txn_range[0] + 1                         # Find how many new txn there are.
-
-        if num_of_new_txn == 0:                                                  # If no new txn exit()
-            print("\033[1;92;40mNo New Transactions. Exiting...\033[m") 
-            exit()
-        
-        if int_batchsize == 0:
-            print(f'\033[1;33mNumber of stored logs not specifed. Storing {BATCHSIZE} logs if avalible.\033[m')
-        elif int_batchsize > MAX_BATCH_SIZE:
-            BATCHSIZE = MAX_BATCH_SIZE
-            print(f'\033[1;33mThe reqested batch size ({int_batchsize}) is to large. Setting to {BATCHSIZE}.\033[m')
+        if not self.csv:
+            # set up for engine
+            AUTHD_CLIENT = gspread_authZ(self.gauth_json)
+            LAST_LOGGED_TXN = self.find_last(AUTHD_CLIENT) # Get last txn that was logged
         else:
-            BATCHSIZE = int_batchsize
-            print(f'\033[1;92;40mStoring {BATCHSIZE} logs if avalible ...\033[m')
+            # Set up logging file.
+            self.log_path = f'./logs/{network_name}/'
+            # Create directory if needed.
+            if not os.path.exists(self.log_path):
+                os.mkdir(self.log_path)
+                log(f'Directory {self.log_path} created ...')
+            # set up for engine
+            AUTHD_CLIENT = None
+            LAST_LOGGED_TXN = self.csv  
 
-        if num_of_new_txn < BATCHSIZE:                                           # Run to the end of the new txn if its less then the log interval
-            logging_range[0] = txn_range[0]
-            logging_range[1] = txn_range[1] + 1
-        else:                                                                    # Set log interval to only grab a few txn's at a time if there are more txn then batchsize
-            logging_range[0] = txn_range[0]
-            logging_range[1] = txn_range[0] + BATCHSIZE
+        maintxr_response = await self.get_txn(pool, LAST_LOGGED_TXN) # Run the last logged txn to get ledger size
+        txn_min = LAST_LOGGED_TXN + 1 # Get the next txn.
+        txn_max = maintxr_response["data"]["ledgerSize"] # Get ledger size.
+        txn_range = txn_max - txn_min + 1 # Find how many new txn there are.
+
+        txn_scope = Txn_scope(txn_min, txn_range, txn_max)
+
+        if txn_scope.range == 0: # If no new txn exit()
+            log("\033[1;92;40mNo New Transactions. Exiting...\033[m") 
+            exit()
 
         #------------------- Below won't run unless there are new txns ----------------------------------
+        
+        if self.batchsize == 0:
+            log(f'\033[1;33mNumber of stored logs not specified. Storing {BATCHSIZE} logs if available.\033[m')
+        elif self.batchsize > MAX_BATCH_SIZE:
+            BATCHSIZE = MAX_BATCH_SIZE
+            log(f'\033[1;33mThe requested batch size ({self.batchsize}) is to large. Setting to {BATCHSIZE}.\033[m')
+        else:
+            BATCHSIZE = self.batchsize
+            log(f'\033[1;92;40mStoring {BATCHSIZE} logs if available ...\033[m')
 
-        print(f'\033[1;92;40mLast transaction logged: {last_logged_txn[0]}\nTransaction Range: {txn_range[0]}-{txn_range[1]}\n{num_of_new_txn} new transactions.\033[m')
-        while True:
-            print(f'\033[1;92;40mLogging transactions {logging_range[0]}-{logging_range[1]-1}\033[m')
+        if txn_scope.range < BATCHSIZE: # Run to the end of the new txn if its less then the log interval
+            logging_range[0] = txn_scope.min
+            logging_range[1] = txn_scope.max + 1
+        else:                          # Set log interval to only grab a few txn's at a time if there are more txn then batchsize
+            logging_range[0] = txn_scope.min
+            logging_range[1] = txn_scope.min + BATCHSIZE
+
+        log(f'\033[1;92;40mLast transaction logged: {LAST_LOGGED_TXN}\nTransaction Range: {txn_scope.min}-{txn_scope.max}\n{txn_scope.range} new transactions.\033[m')
+        attempts = ceil(txn_scope.range / BATCHSIZE) # Set up for loop
+        for _ in range(attempts, 0, -1):
+            log(f'\033[1;92;40mGetting transactions {logging_range[0]}-{logging_range[1]-1}\033[m')
             maintxr_response = await self.get_txn_range(pool, list(range(logging_range[0],logging_range[1])))
-            txn_seqNo = self.metrics(maintxr_response, network_name, txn_range)
-            if txn_seqNo == txn_range[1]:
+            txn_seqNo = self.metrics(maintxr_response, txn_scope, AUTHD_CLIENT)
+            if txn_seqNo == txn_scope.max:
                 break
-            remaining_txns = int(txn_range[1]) - int(logging_range[1]-1)
-            print(f'\033[1;92;40mTransactions {last_logged_txn[0]+1}-{logging_range[1]-1} added.\n{remaining_txns} transactions remaining.\033[m')
+            remaining_txns = int(txn_scope.max) - int(logging_range[1]-1)
+            log(f'\033[1;92;40mTransactions {txn_scope.min}-{logging_range[1]-1} added.\n{remaining_txns} transactions remaining.\033[m')
 
             logging_range[0] = txn_seqNo + 1
-            logging_range[1] = txn_seqNo + BATCHSIZE + 1 # put check here? to see if we are at the last transaction 
+            logging_range[1] = txn_seqNo + BATCHSIZE + 1
 
-        print(f'\033[1;92;40m{txn_seqNo}/{txn_range[1]} Transactions logged! {num_of_new_txn} New Transactions. Done!\033[m')
+        log(f'\033[1;92;40m{txn_seqNo}/{txn_scope.max} Transactions logged! {txn_scope.range} New Transactions. Done!\033[m')
+
         return result
 
+    def find_last(self, AUTHD_CLIENT):
+        sheet_meta_data = AUTHD_CLIENT.values().get(spreadsheetId=self.file_id, range="metaData", majorDimension="COLUMNS").execute()
+        sheet_id = sheet_meta_data.get('values', [])[0][1]
+        last_logged_txn = int( sheet_meta_data.get('values', [])[1][1] )
+        # log(json.dumps(sheet_meta_data, indent=2))
 
-    def find_last(self):
-        authD_client = gspread_authZ(self.gauth_json)
-        sheet = authD_client.open(self.file_name).worksheet(self.worksheet_name)
-        count = 0
-        while True:
-            first_row = sheet.row_values(2)
-            if not first_row:
-                count += 1
-                sheet.delete_row(2)
-            else:
-                last = int(first_row[0]) # returns as str casting to int
-                if last:
-                    if count: print(f'\033[38;5;3m{count} empty row(s) deleted ...\033[m')
-                    print('\033[1;92;40mFound last transaction in sheet ...\033[m')
-                    break
+        batch_update_spreadsheet_request_body = {
+            'requests': [
+            {
+                "sortRange": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 1,
+                    },
+                    "sortSpecs": [
+                        {
+                        "sortOrder": 'ASCENDING'
+                        }
+                    ]
+                }
+            },
+            {
+                "deleteDuplicates": {
+                    "range": {
+                        "sheetId": sheet_id,
+                    },
+                    "comparisonColumns": [
+                        {
+                            "sheetId": sheet_id,
+                            "dimension": 'COLUMNS',
+                            "startIndex": 0,
+                            "endIndex": 12
+                        }
+                    ]
+                }
+            }
+            ],
+        }
+        # log(json.dumps(batch_update_spreadsheet_request_body, indent=2))
 
-        return last
+        batch_update_request = AUTHD_CLIENT.batchUpdate(spreadsheetId=self.file_id, body=batch_update_spreadsheet_request_body).execute()
+        log(json.dumps(batch_update_request, indent=2))
+
+        return last_logged_txn
 
     async def get_txn(self, pool, seq_no: int):
-        req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
-        return await pool.submit_request(req)
+        for i in range(3, 0, -1):
+            try:
+                req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
+                return await pool.submit_request(req)
+            except BaseException as e:
+                log("Unable to submit pool request. Trying again ...")
+                log(e)
+                if not i:
+                    log("Unable to submit pool request.  3 attempts where made.  Exiting ...")
+                    exit()
+                sleep(5)
+                continue
 
     async def get_txn_range(self, pool, seq_nos):
         return [await self.get_txn(pool, seq_no) for seq_no in seq_nos]
 
-    def metrics(self, maintxr_response, network_name, txn_range):
-        authD_client = gspread_authZ(self.gauth_json)
-        try:
-            sheet = authD_client.open(self.file_name).worksheet(self.worksheet_name) # Open sheet
-        except:
-            print("\033[1;31;40mUnable to upload data to sheet! Please check file and worksheet name and try again.")
-            print(f'File name entered: {self.file_name}. Worksheet name entered: {self.worksheet_name}.\033[m')
-            exit()
+    def metrics(self, maintxr_response, txn_scope, AUTHD_CLIENT):
         num_of_txn = 0
+        data_batch = []
 
         for txn in maintxr_response:
-            REVOC_REG_ENTRY = 0
-            REVOC_REG_DEF = 0 
-            CLAIM_DEF = 0
-            NYM = 0
-            ATTRIB = 0
-            SCHEMA = 0
+            REVOC_REG_ENTRY, REVOC_REG_DEF, CLAIM_DEF, NYM, ATTRIB, SCHEMA = 0, 0, 0, 0, 0, 0
 
             txn_seqNo = txn["seqNo"]
             txn_type = txn["data"]["txn"]["type"]
@@ -207,16 +261,30 @@ class main(plugin_collection.Plugin):
             elif txn_type == '20000': 
                 txn_type = 'SET_FEES'
             else:
-                print("error")
+                log("error")
             
             row = [txn_seqNo, txn_type, txn_time, endorser, txn_from, txn_date, REVOC_REG_ENTRY, REVOC_REG_DEF, CLAIM_DEF, NYM, ATTRIB, SCHEMA]
-            print(row)
-            sheet.insert_row(row, 2,value_input_option='USER_ENTERED')
-            num_of_txn += 1
-            if txn_seqNo == txn_range[1]:
-                break
-            
-            time.sleep(2) # This is to make sure we don't run into the google api rate limit.
+            log(row)
+            data_batch.append(row)
 
-        print(f'\033[1;92;40m{num_of_txn} transactions added to {self.file_name} in sheet {self.worksheet_name}.\033[m')
+            num_of_txn += 1
+            if txn_seqNo == txn_scope.max:
+                break
+        
+        if self.csv:
+            csv_file_path = f'{self.log_path}log.csv'
+            with open(csv_file_path,'a') as csv_file:
+                writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_NONE)
+                writer.writerows(data_batch)
+
+        if not self.csv:
+            try:
+                request = AUTHD_CLIENT.values().append(spreadsheetId=self.file_id, range=f"{self.worksheet_name}!A2", valueInputOption="USER_ENTERED", body={"values":data_batch})
+                request.execute()
+            except HttpError as e:
+                log(e)
+                exit()
+
+
+        log(f'\033[1;92;40m{num_of_txn} transactions added to {self.file_id} in sheet {self.worksheet_name}.\033[m')
         return txn_seqNo
