@@ -179,7 +179,7 @@ class main(plugin_collection.Plugin):
         return last_logged_txn
 
     async def get_txn(self, pool, seq_no: int):
-        for i in range(3, 0, -1):
+        for i in range(3, -1, -1):
             try:
                 req = build_get_txn_request(None, LedgerType.DOMAIN, seq_no)
                 return await pool.submit_request(req)
@@ -222,6 +222,11 @@ class main(plugin_collection.Plugin):
             else:
                 txn_from = ""
 
+            if 'dest' in txn["data"]["txn"]["data"]:
+                txn_dest = txn["data"]["txn"]["data"]["dest"]
+            else:
+                txn_dest = ""
+
             if txn_type == '1':
                 txn_type = 'NYM'
                 NYM = 1
@@ -263,7 +268,7 @@ class main(plugin_collection.Plugin):
             else:
                 log("error")
             
-            row = [txn_seqNo, txn_type, txn_time, endorser, txn_from, txn_date, REVOC_REG_ENTRY, REVOC_REG_DEF, CLAIM_DEF, NYM, ATTRIB, SCHEMA]
+            row = [txn_seqNo, txn_type, txn_time, endorser, txn_from, txn_dest, txn_date, REVOC_REG_ENTRY, REVOC_REG_DEF, CLAIM_DEF, NYM, ATTRIB, SCHEMA]
             log(row)
             data_batch.append(row)
 

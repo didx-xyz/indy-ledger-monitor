@@ -3,6 +3,7 @@ from util import log
 from indy_vdr.pool import open_pool
 from singleton import Singleton
 from networks import Networks
+from time import sleep
 
 class PoolCollection(object, metaclass=Singleton):
     def __init__(self, verbose, networks: Networks):
@@ -12,7 +13,7 @@ class PoolCollection(object, metaclass=Singleton):
         self.lock = asyncio.Lock()
 
     async def __fetch_pool_connection(self, genesis_path):
-        for i in range(3, 0, -1):
+        for i in range(3, -1, -1):
             try:
                 log("Connecting to Pool ...")
                 pool = await open_pool(transactions_path=genesis_path)
@@ -22,6 +23,7 @@ class PoolCollection(object, metaclass=Singleton):
                 if not i:
                     print("Unable to connect to pool!  3 attempts where made.  Exiting ...")
                     exit()
+                sleep(5)
                 continue
 
     async def get_pool(self, network_id):
